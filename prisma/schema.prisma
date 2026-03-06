@@ -1,0 +1,244 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  CONTENT_MANAGER
+  VIEWER
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum PublishStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ExperienceType {
+  PRODUCT_VIEWER
+  SURFACE_AR
+  IMAGE_TARGET
+  QR_LAUNCH
+  EMBED_VIEWER
+}
+
+enum AssetType {
+  IMAGE_2D
+  MODEL_GLB
+  MODEL_GLTF
+  MODEL_USDZ
+  POSTER
+  TARGET_IMAGE
+  FACE_EFFECT
+  THUMBNAIL
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  avatarUrl     String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  memberships   Membership[]
+  auditLogs     AuditLog[]
+}
+
+model Company {
+  id              String       @id @default(cuid())
+  name            String
+  slug            String       @unique
+  logoUrl         String?
+  brandPrimary    String       @default("#4263eb")
+  brandSecondary  String       @default("#748ffc")
+  domain          String?
+  isActive        Boolean      @default(true)
+  defaultArSettings Json?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  memberships     Membership[]
+  products        Product[]
+  experiences     Experience[]
+  settings        Setting[]
+  analyticsEvents AnalyticsEvent[]
+  publishRecords  PublishRecord[]
+  auditLogs       AuditLog[]
+}
+
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  companyId String
+  role      UserRole
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+}
+
+model Product {
+  id                  String        @id @default(cuid())
+  companyId           String
+  title               String
+  sku                 String?
+  category            String?
+  description         String?
+  brand               String?
+  thumbnailUrl        String?
+  status              ProductStatus @default(DRAFT)
+  tags                String[]
+  dimensionWidth      Float?
+  dimensionHeight     Float?
+  dimensionDepth      Float?
+  dimensionUnit       String?       @default("cm")
+  scalePreset         Float         @default(1.0)
+  anchorType          String        @default("floor")
+  defaultSceneConfig  Json?
+  assetCompletenessScore Int        @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assets              ProductAsset[]
+  experiences         Experience[]
+  analyticsEvents     AnalyticsEvent[]
+
+  @@index([companyId])
+  @@index([status])
+}
+
+model ProductAsset {
+  id            String    @id @default(cuid())
+  productId     String
+  assetType     AssetType
+  fileName      String
+  filePath      String
+  fileSize      Int
+  mimeType      String
+  metadata      Json?
+  isProcessed   Boolean   @default(false)
+  processingStatus String? @default("pending")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([assetType])
+}
+
+model Experience {
+  id                String         @id @default(cuid())
+  companyId         String
+  productId         String?
+  name              String
+  slug              String         @unique
+  experienceType    ExperienceType
+  scale             Float          @default(1.0)
+  initialRotationX  Float          @default(0)
+  initialRotationY  Float          @default(0)
+  initialRotationZ  Float          @default(0)
+  positionOffsetX   Float          @default(0)
+  positionOffsetY   Float          @default(0)
+  positionOffsetZ   Float          @default(0)
+  lightingPreset    String         @default("studio")
+  backgroundMode    String         @default("transparent")
+  ctaText           String?
+  ctaLink           String?
+  analyticsEnabled  Boolean        @default(true)
+  publishStatus     PublishStatus  @default(DRAFT)
+  sceneConfig       Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product           Product?       @relation(fields: [productId], references: [id], onDelete: SetNull)
+  publishRecords    PublishRecord[]
+  analyticsEvents   AnalyticsEvent[]
+
+  @@index([companyId])
+  @@index([publishStatus])
+}
+
+model PublishRecord {
+  id            String       @id @default(cuid())
+  experienceId  String
+  companyId     String
+  publishStatus PublishStatus
+  publicUrl     String?
+  embedSnippet  String?
+  qrCodeUrl     String?
+  publishedAt   DateTime?
+  publishedBy   String?
+  createdAt     DateTime     @default(now())
+  experience    Experience   @relation(fields: [experienceId], references: [id], onDelete: Cascade)
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([experienceId])
+}
+
+model AnalyticsEvent {
+  id            String    @id @default(cuid())
+  companyId     String
+  productId     String?
+  experienceId  String?
+  eventType     String
+  eventData     Json?
+  sessionId     String?
+  userAgent     String?
+  ipAddress     String?
+  duration      Int?
+  createdAt     DateTime  @default(now())
+  company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  product       Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  experience    Experience? @relation(fields: [experienceId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model Setting {
+  id        String   @id @default(cuid())
+  companyId String?
+  key       String
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  company   Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, key])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  companyId  String?
+  action     String
+  entity     String
+  entityId   String?
+  details    Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company    Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([action])
+  @@index([createdAt])
+}
