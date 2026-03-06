@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getSession, isSuperAdmin } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

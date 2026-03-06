@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { parseDeviceType, parseBrowser, parseCountry, determineLaunchSource } from '@/lib/analytics';
 import { dispatchWebhook } from '@/lib/webhooks';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();

@@ -5,6 +5,8 @@ import { createToken } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import type { JWTPayload } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   try {
     const { email, password } = await req.json();

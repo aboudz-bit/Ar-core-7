@@ -5,6 +5,8 @@ import { logAudit } from '@/lib/audit';
 import { generateQRForExperience } from '@/lib/qr-service';
 import { dispatchWebhook } from '@/lib/webhooks';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

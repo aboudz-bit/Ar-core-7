@@ -4,6 +4,8 @@ import { getSession, isSuperAdmin } from '@/lib/auth';
 import { generateApiKey } from '@/lib/api-keys';
 import { logAudit } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 // List API keys for a company (secrets are never returned)
 export async function GET(req: NextRequest) {
   const session = await getSession();

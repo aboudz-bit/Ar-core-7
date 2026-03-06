@@ -4,6 +4,8 @@ import { getSession, isSuperAdmin } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 import { randomBytes } from 'crypto';
 
+export const dynamic = 'force-dynamic';
+
 const VALID_EVENTS = ['ar_viewed', 'ar_launched', 'experience_published', 'qr_opened', 'asset_uploaded'];
 
 export async function GET(req: NextRequest) {

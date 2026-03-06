@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { requireApiKey, checkRateLimit } from '@/lib/api-auth';
 import { formatAssetResponse } from '@/lib/api-v1';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { context, error } = await requireApiKey(req);
   if (error) return error;

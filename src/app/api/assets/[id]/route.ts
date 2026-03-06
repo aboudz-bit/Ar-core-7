@@ -5,6 +5,8 @@ import { deleteFile, saveFile, validateFileSize, resolveAssetType, buildProductP
 import { logAudit } from '@/lib/audit';
 import { calculateCompletenessScore } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 async function getAssetWithAuth(assetId: string) {
   const session = await getSession();
   if (!session) return { error: 'Unauthorized', status: 401, session: null, asset: null, product: null };

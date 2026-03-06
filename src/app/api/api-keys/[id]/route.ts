@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { getSession, isSuperAdmin } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
 
+export const dynamic = 'force-dynamic';
+
 // Revoke an API key
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const session = await getSession();
