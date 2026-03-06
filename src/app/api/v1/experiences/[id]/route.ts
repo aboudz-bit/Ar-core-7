@@ -7,7 +7,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const { context, error } = await requireApiKey(req);
   if (error) return error;
 
-  const rateLimitError = checkRateLimit(context.apiKeyId);
+  const rateLimitError = await checkRateLimit(context.apiKeyId);
   if (rateLimitError) return rateLimitError;
 
   const experience = await prisma.experience.findFirst({

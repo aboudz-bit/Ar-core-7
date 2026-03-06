@@ -7,7 +7,7 @@ export async function GET(req: NextRequest, { params }: { params: { externalId: 
   const { context, error } = await requireApiKey(req);
   if (error) return error;
 
-  const rateLimitError = checkRateLimit(context.apiKeyId);
+  const rateLimitError = await checkRateLimit(context.apiKeyId);
   if (rateLimitError) return rateLimitError;
 
   const product = await prisma.product.findFirst({

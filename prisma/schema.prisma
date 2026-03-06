@@ -90,6 +90,7 @@ model Company {
   publishRecords  PublishRecord[]
   auditLogs       AuditLog[]
   apiKeys         ApiKey[]
+  webhooks        Webhook[]
 }
 
 model ApiKey {
@@ -239,6 +240,11 @@ model AnalyticsEvent {
   userAgent     String?
   ipAddress     String?
   duration      Int?
+  deviceType    String?
+  browser       String?
+  country       String?
+  launchSource  String?   // embed, direct, qr, sdk, api
+  referrer      String?
   createdAt     DateTime  @default(now())
   company       Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   product       Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -247,6 +253,8 @@ model AnalyticsEvent {
   @@index([companyId])
   @@index([eventType])
   @@index([createdAt])
+  @@index([deviceType])
+  @@index([launchSource])
 }
 
 model Setting {
@@ -276,4 +284,71 @@ model AuditLog {
   @@index([companyId])
   @@index([action])
   @@index([createdAt])
+}
+
+model Webhook {
+  id          String    @id @default(cuid())
+  companyId   String
+  url         String
+  secret      String
+  events      String[]  // ar_viewed, ar_launched, experience_published, qr_opened, asset_uploaded
+  isActive    Boolean   @default(true)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@index([companyId])
+  @@index([isActive])
+}
+
+model WebhookDelivery {
+  id          String    @id @default(cuid())
+  webhookId   String
+  event       String
+  payload     Json
+  statusCode  Int?
+  response    String?
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  nextRetryAt DateTime?
+  deliveredAt DateTime?
+  failedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  webhook     Webhook   @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId])
+  @@index([nextRetryAt])
+}
+
+model QRCode {
+  id            String    @id @default(cuid())
+  experienceId  String?
+  targetUrl     String
+  imageData     String    // base64 PNG
+  format        String    @default("png")
+  size          Int       @default(300)
+  createdAt     DateTime  @default(now())
+
+  @@index([experienceId])
+  @@unique([targetUrl])
+}
+
+model ModelOptimizationJob {
+  id            String    @id @default(cuid())
+  assetId       String
+  productId     String
+  companyId     String
+  status        String    @default("pending") // pending, processing, completed, failed
+  inputPath     String
+  outputPath    String?
+  optimizations Json?     // { texturesCompressed, posterGenerated, lodGenerated, sizeReduction }
+  errorMessage  String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([status])
+  @@index([assetId])
 }

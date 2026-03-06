@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession, isSuperAdmin } from '@/lib/auth';
 import { logAudit } from '@/lib/audit';
+import { generateQRForExperience } from '@/lib/qr-service';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -71,6 +73,23 @@ export async function POST(req: NextRequest) {
     entity: 'Experience',
     entityId: experienceId,
   });
+
+  // Auto-generate QR code on publish
+  if (newStatus === 'PUBLISHED') {
+    generateQRForExperience(experience.slug, experienceId).catch((err) => {
+      console.error('QR generation failed:', err);
+    });
+
+    // Dispatch webhook
+    dispatchWebhook(experience.companyId, 'experience_published', {
+      experienceId,
+      name: experience.name,
+      slug: experience.slug,
+      publicUrl,
+      embedUrl,
+      launchUrl,
+    }).catch(() => {});
+  }
 
   return NextResponse.json({
     success: true,

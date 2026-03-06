@@ -4,6 +4,8 @@ import { getSession, isSuperAdmin } from '@/lib/auth';
 import { saveFile, validateFileSize, resolveAssetType, isAllowedExtension, buildProductPath } from '@/lib/storage';
 import { logAudit } from '@/lib/audit';
 import { calculateCompletenessScore } from '@/lib/utils';
+import { queueModelOptimization } from '@/lib/model-pipeline';
+import { dispatchWebhook } from '@/lib/webhooks';
 
 export async function GET(req: NextRequest) {
   const session = await getSession();
@@ -115,6 +117,22 @@ export async function POST(req: NextRequest) {
     entityId: asset.id,
     details: { fileName: file.name, assetType: resolvedType, fileSize: file.size },
   });
+
+  // Queue model optimization for 3D model uploads
+  if (['MODEL_GLB', 'MODEL_GLTF', 'MODEL_USDZ'].includes(resolvedType)) {
+    queueModelOptimization(asset.id, productId, product.companyId, filePath).catch((err) => {
+      console.error('Model optimization queue failed:', err);
+    });
+  }
+
+  // Dispatch webhook for asset upload
+  dispatchWebhook(product.companyId, 'asset_uploaded', {
+    assetId: asset.id,
+    productId,
+    fileName: file.name,
+    assetType: resolvedType,
+    fileSize: file.size,
+  }).catch(() => {});
 
   return NextResponse.json({ success: true, data: asset }, { status: 201 });
 }

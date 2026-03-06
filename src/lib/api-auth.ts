@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from './prisma';
 import { hashApiKey, parseApiKeyFromHeader } from './api-keys';
+import { getRateLimiter } from './rate-limiter';
 
 export interface ApiKeyContext {
   apiKeyId: string;
@@ -65,36 +66,24 @@ export async function requireApiKey(req: NextRequest): Promise<
   return { context, error: null };
 }
 
-// Simple in-memory rate limiter
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_WINDOW = 60_000; // 1 minute
-const RATE_LIMIT_MAX = 120; // requests per window
-
 /**
  * Check rate limit for an API key.
- * Returns error response if rate limited, null otherwise.
+ * Uses Redis when available, falls back to in-memory.
  */
-export function checkRateLimit(apiKeyId: string): NextResponse | null {
-  const now = Date.now();
-  const entry = rateLimitMap.get(apiKeyId);
+export async function checkRateLimit(apiKeyId: string): Promise<NextResponse | null> {
+  const limiter = getRateLimiter();
+  const result = await limiter.check(apiKeyId);
 
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(apiKeyId, { count: 1, resetAt: now + RATE_LIMIT_WINDOW });
-    return null;
-  }
-
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) {
-    const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+  if (result.limited) {
     return NextResponse.json(
       { success: false, error: 'Rate limit exceeded. Try again later.' },
       {
         status: 429,
         headers: {
-          'Retry-After': String(retryAfter),
-          'X-RateLimit-Limit': String(RATE_LIMIT_MAX),
+          'Retry-After': String(result.retryAfter),
+          'X-RateLimit-Limit': String(result.limit),
           'X-RateLimit-Remaining': '0',
-          'X-RateLimit-Reset': String(Math.ceil(entry.resetAt / 1000)),
+          'X-RateLimit-Reset': String(result.resetAt),
         },
       }
     );
@@ -102,11 +91,3 @@ export function checkRateLimit(apiKeyId: string): NextResponse | null {
 
   return null;
 }
-
-// Periodic cleanup of expired entries
-setInterval(() => {
-  const now = Date.now();
-  rateLimitMap.forEach((entry, key) => {
-    if (now > entry.resetAt) rateLimitMap.delete(key);
-  });
-}, 60_000);
