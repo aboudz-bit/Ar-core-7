@@ -17,6 +17,7 @@ import {
   Box,
   ChevronLeft,
   Menu,
+  BookOpen,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,6 +31,7 @@ const navItems = [
   { label: 'Publish Center', href: '/dashboard/publish', icon: Send },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart3 },
   { label: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { label: 'Integration Docs', href: '/dashboard/docs', icon: BookOpen },
 ];
 
 export function Sidebar() {

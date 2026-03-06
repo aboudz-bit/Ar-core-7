@@ -14,6 +14,8 @@ const publicPaths = [
   '/product',
   '/api/analytics/track',
   '/api/public',
+  '/api/v1',
+  '/sdk',
 ];
 
 export function middleware(request: NextRequest) {

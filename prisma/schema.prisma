@@ -35,6 +35,16 @@ enum ExperienceType {
   EMBED_VIEWER
 }
 
+enum ApiKeyStatus {
+  ACTIVE
+  REVOKED
+}
+
+enum ApiKeyEnvironment {
+  TEST
+  LIVE
+}
+
 enum AssetType {
   IMAGE_2D
   MODEL_GLB
@@ -79,6 +89,26 @@ model Company {
   analyticsEvents AnalyticsEvent[]
   publishRecords  PublishRecord[]
   auditLogs       AuditLog[]
+  apiKeys         ApiKey[]
+}
+
+model ApiKey {
+  id          String            @id @default(cuid())
+  companyId   String
+  name        String
+  keyPrefix   String
+  hashedSecret String
+  status      ApiKeyStatus      @default(ACTIVE)
+  environment ApiKeyEnvironment @default(LIVE)
+  lastUsedAt  DateTime?
+  createdBy   String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([keyPrefix])
+  @@index([status])
 }
 
 model Membership {
@@ -114,6 +144,10 @@ model Product {
   anchorType          String        @default("floor")
   defaultSceneConfig  Json?
   assetCompletenessScore Int        @default(0)
+  externalId          String?
+  externalSource      String?
+  externalHandle      String?
+  syncStatus          String        @default("manual")
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   company             Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -123,6 +157,7 @@ model Product {
 
   @@index([companyId])
   @@index([status])
+  @@index([externalId])
 }
 
 model ProductAsset {

@@ -376,8 +376,30 @@ export default function ExperienceDetailPage() {
                   </div>
 
                   <div className="pt-2 border-t border-surface-100">
-                    <p className="text-xs font-medium text-surface-500 mb-1">Public API</p>
+                    <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Code className="w-3 h-3" /> SDK Embed</p>
+                    <textarea
+                      readOnly
+                      className="input text-xs h-20 font-mono"
+                      value={`<script src="${appUrl}/sdk/arcore7-sdk.js"></script>\n<div id="ar-viewer"></div>\n<script>\n  ARCore7.mountViewer({ target: "#ar-viewer", experienceSlug: "${experience.slug}" })\n</script>`}
+                    />
+                    <button onClick={() => copyToClipboard(`<script src="${appUrl}/sdk/arcore7-sdk.js"></script>\n<div id="ar-viewer"></div>\n<script>\n  ARCore7.mountViewer({ target: "#ar-viewer", experienceSlug: "${experience.slug}" })\n</script>`, 'sdk')} className="btn-ghost text-xs mt-1">
+                      <Copy className="w-3 h-3" /> Copy SDK Snippet
+                    </button>
+                    {copied === 'sdk' && <p className="text-xs text-emerald-600 mt-1">Copied!</p>}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><QrCode className="w-3 h-3" /> QR Code</p>
+                    <a href={`/qr/${experience.slug}`} target="_blank" className="btn-secondary w-full text-sm">
+                      <QrCode className="w-4 h-4" /> Open QR Page
+                    </a>
+                  </div>
+
+                  <div className="pt-2 border-t border-surface-100">
+                    <p className="text-xs font-medium text-surface-500 mb-1">API Endpoints</p>
                     <code className="text-[11px] text-surface-600 block break-all">GET /api/public/experiences/{experience.slug}</code>
+                    <code className="text-[11px] text-surface-600 block break-all mt-1">GET /api/v1/experiences/by-slug/{experience.slug}</code>
+                    <code className="text-[11px] text-surface-600 block break-all mt-1">GET /api/v1/launch/experience/{experience.slug}</code>
                   </div>
                 </div>
               </div>

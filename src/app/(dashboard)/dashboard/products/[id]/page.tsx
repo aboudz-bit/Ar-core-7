@@ -36,6 +36,10 @@ interface ProductDetail {
   assetCompletenessScore: number;
   scalePreset: number;
   anchorType: string;
+  externalId: string | null;
+  externalSource: string | null;
+  externalHandle: string | null;
+  syncStatus: string;
   createdAt: string;
   company: { id: string; name: string; slug: string; brandPrimary: string };
   assets: ProductAsset[];
@@ -58,7 +62,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ title: '', sku: '', category: '', description: '', status: '' });
+  const [editForm, setEditForm] = useState({ title: '', sku: '', category: '', description: '', status: '', externalId: '', externalSource: '', externalHandle: '' });
   const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
   const [replacingAssetId, setReplacingAssetId] = useState<string | null>(null);
   const [showUploadZone, setShowUploadZone] = useState(false);
@@ -75,6 +79,9 @@ export default function ProductDetailPage() {
         category: data.data.category || '',
         description: data.data.description || '',
         status: data.data.status,
+        externalId: data.data.externalId || '',
+        externalSource: data.data.externalSource || '',
+        externalHandle: data.data.externalHandle || '',
       });
     }
     setLoading(false);
@@ -240,6 +247,23 @@ export default function ProductDetailPage() {
                       <option value="ARCHIVED">Archived</option>
                     </select>
                   </div>
+                  <div className="pt-3 border-t border-surface-100">
+                    <p className="text-xs font-semibold text-surface-600 mb-2">External Mapping</p>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="label">External ID</label>
+                        <input type="text" className="input" placeholder="e.g. pepperoni_pizza_large" value={editForm.externalId} onChange={(e) => setEditForm({ ...editForm, externalId: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="label">External Source</label>
+                        <input type="text" className="input" placeholder="e.g. shopify, woocommerce, internal" value={editForm.externalSource} onChange={(e) => setEditForm({ ...editForm, externalSource: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="label">External Handle</label>
+                        <input type="text" className="input" placeholder="Optional display handle" value={editForm.externalHandle} onChange={(e) => setEditForm({ ...editForm, externalHandle: e.target.value })} />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 text-sm">
@@ -249,6 +273,16 @@ export default function ProductDetailPage() {
                   <div className="flex justify-between"><span className="text-surface-500">Scale</span><span className="text-surface-800">{product.scalePreset}x</span></div>
                   <div className="flex justify-between"><span className="text-surface-500">Anchor</span><span className="text-surface-800">{product.anchorType}</span></div>
                   <div className="flex justify-between"><span className="text-surface-500">Created</span><span className="text-surface-800">{formatDate(product.createdAt)}</span></div>
+                  {product.externalId && (
+                    <div className="pt-2 border-t border-surface-100">
+                      <p className="text-surface-500 mb-1">External Mapping</p>
+                      <div className="text-xs space-y-1">
+                        <div className="flex justify-between"><span className="text-surface-400">ID</span><code className="text-surface-700">{product.externalId}</code></div>
+                        {product.externalSource && <div className="flex justify-between"><span className="text-surface-400">Source</span><span className="text-surface-700">{product.externalSource}</span></div>}
+                        {product.externalHandle && <div className="flex justify-between"><span className="text-surface-400">Handle</span><span className="text-surface-700">{product.externalHandle}</span></div>}
+                      </div>
+                    </div>
+                  )}
                   {product.description && (
                     <div className="pt-2 border-t border-surface-100">
                       <p className="text-surface-500 mb-1">Description</p>
