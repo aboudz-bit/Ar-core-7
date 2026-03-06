@@ -14,6 +14,7 @@ const publicPaths = [
   '/product',
   '/api/analytics/track',
   '/api/public',
+  '/api/demo',
   '/api/v1',
   '/sdk',
 ];
