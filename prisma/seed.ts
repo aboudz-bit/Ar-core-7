@@ -1,7 +1,99 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { writeFileSync, mkdirSync, existsSync } from 'fs';
+import path from 'path';
 
 const prisma = new PrismaClient();
+
+/** Create a small placeholder file and return its public URL path */
+function createPlaceholderFile(companyId: string, productId: string, fileName: string, content: string): string {
+  const dir = path.join('./public/uploads', companyId, 'products', productId);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const safeName = `seed-${fileName}`;
+  const filePath = path.join(dir, safeName);
+  writeFileSync(filePath, content);
+  return `/uploads/${companyId}/products/${productId}/${safeName}`;
+}
+
+/** Create a 1x1 pixel PNG placeholder */
+function createPlaceholderImage(companyId: string, productId: string, fileName: string): string {
+  // Minimal valid PNG (1x1 gray pixel)
+  const png = Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489' +
+    '0000000a49444154789c626000000002000198e195e80000000049454e44ae426082',
+    'hex'
+  );
+  const dir = path.join('./public/uploads', companyId, 'products', productId);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const safeName = `seed-${fileName}`;
+  const filePath = path.join(dir, safeName);
+  writeFileSync(filePath, png);
+  return `/uploads/${companyId}/products/${productId}/${safeName}`;
+}
+
+/** Create a minimal valid GLB file (empty scene) */
+function createPlaceholderGlb(companyId: string, productId: string, fileName: string): string {
+  // Minimal valid glTF 2.0 binary (GLB) — empty scene
+  const json = JSON.stringify({
+    asset: { version: '2.0', generator: 'ar-core-7-seed' },
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [{ name: 'DemoNode', mesh: 0 }],
+    meshes: [{ primitives: [{ attributes: { POSITION: 0 }, mode: 4 }] }],
+    accessors: [{
+      bufferView: 0, componentType: 5126, count: 3, type: 'VEC3',
+      max: [1, 1, 0], min: [-1, -1, 0],
+    }],
+    bufferViews: [{ buffer: 0, byteOffset: 0, byteLength: 36, target: 34962 }],
+    buffers: [{ byteLength: 36 }],
+  });
+
+  // Triangle vertex positions (3 vertices × 3 floats × 4 bytes = 36 bytes)
+  const binData = new Float32Array([
+    0, 1, 0,     // top
+    -1, -1, 0,   // bottom-left
+    1, -1, 0,    // bottom-right
+  ]);
+  const binBuffer = Buffer.from(binData.buffer);
+
+  // Pad JSON to 4-byte alignment
+  const jsonStr = json;
+  const jsonPadded = jsonStr + ' '.repeat((4 - (jsonStr.length % 4)) % 4);
+  const jsonBuffer = Buffer.from(jsonPadded, 'utf8');
+
+  // GLB header: magic (4) + version (4) + length (4) = 12 bytes
+  // JSON chunk: length (4) + type (4) + data
+  // BIN chunk: length (4) + type (4) + data
+  const totalLength = 12 + 8 + jsonBuffer.length + 8 + binBuffer.length;
+
+  const header = Buffer.alloc(12);
+  header.writeUInt32LE(0x46546C67, 0); // glTF magic
+  header.writeUInt32LE(2, 4);           // version 2
+  header.writeUInt32LE(totalLength, 8);
+
+  const jsonChunkHeader = Buffer.alloc(8);
+  jsonChunkHeader.writeUInt32LE(jsonBuffer.length, 0);
+  jsonChunkHeader.writeUInt32LE(0x4E4F534A, 4); // JSON
+
+  const binChunkHeader = Buffer.alloc(8);
+  binChunkHeader.writeUInt32LE(binBuffer.length, 0);
+  binChunkHeader.writeUInt32LE(0x004E4942, 4); // BIN
+
+  const glb = Buffer.concat([header, jsonChunkHeader, jsonBuffer, binChunkHeader, binBuffer]);
+
+  const dir = path.join('./public/uploads', companyId, 'products', productId);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const safeName = `seed-${fileName}`;
+  const filePath = path.join(dir, safeName);
+  writeFileSync(filePath, glb);
+  return `/uploads/${companyId}/products/${productId}/${safeName}`;
+}
 
 async function main() {
   console.log('Seeding AR-core-7 database...');
@@ -115,7 +207,7 @@ async function main() {
       tags: ['sneaker', 'running', 'premium', 'athletic'],
       scalePreset: 1.0,
       anchorType: 'floor',
-      assetCompletenessScore: 30,
+      assetCompletenessScore: 100,
     },
   });
 
@@ -131,7 +223,7 @@ async function main() {
       tags: ['watch', 'luxury', 'chronograph', 'swiss'],
       scalePreset: 0.3,
       anchorType: 'table',
-      assetCompletenessScore: 20,
+      assetCompletenessScore: 45,
     },
   });
 
@@ -217,6 +309,123 @@ async function main() {
     },
   });
 
+  // ============================================================
+  // Create FULL ASSET SET for the Premium Running Sneaker
+  // This demonstrates the complete asset pipeline
+  // ============================================================
+  console.log('Creating demo asset files for Premium Running Sneaker...');
+
+  const sneakerGlbPath = createPlaceholderGlb(luxeBrands.id, sneaker.id, 'sneaker-model.glb');
+  const sneakerThumbnailPath = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-thumbnail.png');
+  const sneakerPosterPath = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-poster.png');
+  const sneakerImage1Path = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-front.png');
+  const sneakerImage2Path = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-side.png');
+  const sneakerTargetPath = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-target.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: sneaker.id,
+        assetType: 'MODEL_GLB',
+        fileName: 'sneaker-model.glb',
+        filePath: sneakerGlbPath,
+        fileSize: 2457600, // ~2.4MB
+        mimeType: 'model/gltf-binary',
+      },
+      {
+        productId: sneaker.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'sneaker-thumbnail.png',
+        filePath: sneakerThumbnailPath,
+        fileSize: 85000,
+        mimeType: 'image/png',
+      },
+      {
+        productId: sneaker.id,
+        assetType: 'POSTER',
+        fileName: 'sneaker-poster.png',
+        filePath: sneakerPosterPath,
+        fileSize: 120000,
+        mimeType: 'image/png',
+      },
+      {
+        productId: sneaker.id,
+        assetType: 'IMAGE_2D',
+        fileName: 'sneaker-front.png',
+        filePath: sneakerImage1Path,
+        fileSize: 95000,
+        mimeType: 'image/png',
+      },
+      {
+        productId: sneaker.id,
+        assetType: 'IMAGE_2D',
+        fileName: 'sneaker-side.png',
+        filePath: sneakerImage2Path,
+        fileSize: 88000,
+        mimeType: 'image/png',
+      },
+      {
+        productId: sneaker.id,
+        assetType: 'TARGET_IMAGE',
+        fileName: 'sneaker-target.png',
+        filePath: sneakerTargetPath,
+        fileSize: 150000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  // Also update the sneaker thumbnailUrl
+  await prisma.product.update({
+    where: { id: sneaker.id },
+    data: { thumbnailUrl: sneakerThumbnailPath },
+  });
+
+  // Create partial assets for the watch (model + thumbnail only)
+  const watchGlbPath = createPlaceholderGlb(luxeBrands.id, watch.id, 'watch-model.glb');
+  const watchThumbnailPath = createPlaceholderImage(luxeBrands.id, watch.id, 'watch-thumbnail.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: watch.id,
+        assetType: 'MODEL_GLB',
+        fileName: 'watch-model.glb',
+        filePath: watchGlbPath,
+        fileSize: 1800000,
+        mimeType: 'model/gltf-binary',
+      },
+      {
+        productId: watch.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'watch-thumbnail.png',
+        filePath: watchThumbnailPath,
+        fileSize: 72000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  await prisma.product.update({
+    where: { id: watch.id },
+    data: { thumbnailUrl: watchThumbnailPath },
+  });
+
+  // Create a model asset for headphones
+  const hpGlbPath = createPlaceholderGlb(techGear.id, headphones.id, 'headphones-model.glb');
+  await prisma.productAsset.create({
+    data: {
+      productId: headphones.id,
+      assetType: 'MODEL_GLB',
+      fileName: 'headphones-model.glb',
+      filePath: hpGlbPath,
+      fileSize: 3200000,
+      mimeType: 'model/gltf-binary',
+    },
+  });
+
+  console.log('Demo asset files created.');
+
   // Create experiences
   const sneakerViewer = await prisma.experience.create({
     data: {
@@ -264,7 +473,7 @@ async function main() {
     },
   });
 
-  const watchImageTarget = await prisma.experience.create({
+  await prisma.experience.create({
     data: {
       companyId: luxeBrands.id,
       productId: watch.id,
@@ -292,7 +501,7 @@ async function main() {
     },
   });
 
-  const lampViewer = await prisma.experience.create({
+  await prisma.experience.create({
     data: {
       companyId: homeDecor.id,
       productId: lamp.id,
@@ -398,7 +607,9 @@ async function main() {
       { userId: superAdmin.id, companyId: techGear.id, action: 'CREATE', entity: 'Company', entityId: techGear.id },
       { userId: superAdmin.id, companyId: homeDecor.id, action: 'CREATE', entity: 'Company', entityId: homeDecor.id },
       { userId: superAdmin.id, companyId: luxeBrands.id, action: 'CREATE', entity: 'Product', entityId: sneaker.id },
+      { userId: superAdmin.id, companyId: luxeBrands.id, action: 'UPLOAD', entity: 'ProductAsset', details: { fileName: 'sneaker-model.glb', assetType: 'MODEL_GLB' } },
       { userId: superAdmin.id, companyId: luxeBrands.id, action: 'CREATE', entity: 'Experience', entityId: sneakerViewer.id },
+      { userId: superAdmin.id, companyId: luxeBrands.id, action: 'PUBLISH', entity: 'Experience', entityId: sneakerViewer.id, details: { action: 'publish' } },
       { userId: superAdmin.id, action: 'LOGIN', entity: 'User', entityId: superAdmin.id },
     ],
   });
@@ -411,9 +622,15 @@ async function main() {
   console.log('  Content Manager: mike@luxebrands.com / admin123');
   console.log('  Viewer: viewer@arcore7.com / viewer123');
   console.log('');
+  console.log('Products with full assets:');
+  console.log('  Premium Running Sneaker (Luxe Brands) — GLB + Thumbnail + Poster + 2 Images + Target Image = 100%');
+  console.log('  Chronograph Watch Elite (Luxe Brands) — GLB + Thumbnail = 50%');
+  console.log('  Wireless ANC Headphones (TechGear Pro) — GLB = 30%');
+  console.log('');
   console.log(`Companies: ${3}`);
   console.log(`Products: ${7}`);
   console.log(`Experiences: ${6}`);
+  console.log(`Product Assets: ${9}`);
   console.log(`Analytics events: ${analyticsData.length}`);
 }
 

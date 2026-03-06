@@ -1,15 +1,27 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Header } from '@/components/dashboard/Header';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
+import { FileUploadZone } from '@/components/ui/FileUploadZone';
+import { AssetCard } from '@/components/ui/AssetCard';
 import {
-  ArrowLeft, Upload, Trash2, FileImage, Box, Eye, Smartphone,
-  Image, Target, Tag, Edit3, Save, X
+  ArrowLeft, Upload, Box, Eye, Smartphone, Image, Target, Tag, Edit3, Save, X,
+  CheckCircle, AlertTriangle, FileImage, Crosshair, Star, Layers
 } from 'lucide-react';
 import { formatBytes, formatDate } from '@/lib/utils';
+
+interface ProductAsset {
+  id: string;
+  assetType: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  createdAt: string;
+}
 
 interface ProductDetail {
   id: string;
@@ -26,40 +38,33 @@ interface ProductDetail {
   anchorType: string;
   createdAt: string;
   company: { id: string; name: string; slug: string; brandPrimary: string };
-  assets: {
-    id: string;
-    assetType: string;
-    fileName: string;
-    filePath: string;
-    fileSize: number;
-    mimeType: string;
-    createdAt: string;
-  }[];
+  assets: ProductAsset[];
   experiences: { id: string; name: string; slug: string; experienceType: string; publishStatus: string }[];
 }
 
-const ASSET_TYPE_ICONS: Record<string, typeof Box> = {
-  MODEL_GLB: Box,
-  MODEL_GLTF: Box,
-  MODEL_USDZ: Smartphone,
-  IMAGE_2D: Image,
-  THUMBNAIL: Image,
-  POSTER: Image,
-  TARGET_IMAGE: Target,
-  FACE_EFFECT: Eye,
-};
+const ASSET_REQUIREMENTS = [
+  { type: 'MODEL_GLB', label: '3D Model (GLB)', icon: Box, required: true },
+  { type: 'THUMBNAIL', label: 'Thumbnail', icon: Star, required: true },
+  { type: 'IMAGE_2D', label: 'Product Image', icon: Image, required: false },
+  { type: 'POSTER', label: 'Poster Image', icon: FileImage, required: false },
+  { type: 'MODEL_USDZ', label: 'iOS Model (USDZ)', icon: Smartphone, required: false },
+  { type: 'TARGET_IMAGE', label: 'AR Target Image', icon: Crosshair, required: false },
+];
 
 export default function ProductDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
   const [product, setProduct] = useState<ProductDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ title: '', sku: '', category: '', description: '', status: '' });
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null);
+  const [replacingAssetId, setReplacingAssetId] = useState<string | null>(null);
+  const [showUploadZone, setShowUploadZone] = useState(false);
+  const [uploadAssetType, setUploadAssetType] = useState<string | undefined>(undefined);
 
-  const loadProduct = async () => {
+  const loadProduct = useCallback(async () => {
     const res = await fetch(`/api/products/${params.id}`);
     const data = await res.json();
     if (data.success) {
@@ -73,31 +78,9 @@ export default function ProductDetailPage() {
       });
     }
     setLoading(false);
-  };
+  }, [params.id]);
 
-  useEffect(() => { loadProduct(); }, [params.id]);
-
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !product) return;
-    setUploading(true);
-
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('productId', product.id);
-
-    // Auto-detect asset type
-    if (file.name.endsWith('.glb') || file.name.endsWith('.gltf')) {
-      formData.append('assetType', 'MODEL_GLB');
-    } else if (file.name.endsWith('.usdz')) {
-      formData.append('assetType', 'MODEL_USDZ');
-    }
-
-    await fetch('/api/assets', { method: 'POST', body: formData });
-    await loadProduct();
-    setUploading(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
+  useEffect(() => { loadProduct(); }, [loadProduct]);
 
   const handleSave = async () => {
     if (!product) return;
@@ -110,17 +93,74 @@ export default function ProductDetailPage() {
     loadProduct();
   };
 
+  const handleDeleteAsset = async (assetId: string) => {
+    if (!confirm('Delete this asset? This cannot be undone.')) return;
+    setDeletingAssetId(assetId);
+    await fetch(`/api/assets/${assetId}`, { method: 'DELETE' });
+    setDeletingAssetId(null);
+    loadProduct();
+  };
+
+  const handleChangeType = async (assetId: string, newType: string) => {
+    await fetch(`/api/assets/${assetId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assetType: newType }),
+    });
+    loadProduct();
+  };
+
+  const handleReplaceStart = (assetId: string) => {
+    setReplacingAssetId(assetId);
+    replaceInputRef.current?.click();
+  };
+
+  const handleReplaceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !replacingAssetId) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    await fetch(`/api/assets/${replacingAssetId}`, {
+      method: 'PATCH',
+      body: formData,
+    });
+
+    setReplacingAssetId(null);
+    if (replaceInputRef.current) replaceInputRef.current.value = '';
+    loadProduct();
+  };
+
+  const handleQuickUpload = (type: string) => {
+    setUploadAssetType(type);
+    setShowUploadZone(true);
+  };
+
   if (loading) return <PageLoader />;
   if (!product) return <div className="p-6">Product not found</div>;
 
   const glbAsset = product.assets.find((a) => a.assetType === 'MODEL_GLB');
   const usdzAsset = product.assets.find((a) => a.assetType === 'MODEL_USDZ');
   const posterAsset = product.assets.find((a) => a.assetType === 'POSTER');
+  const assetTypeSet = new Set(product.assets.map((a) => a.assetType));
+
+  // Completeness checklist
+  const completenessItems = ASSET_REQUIREMENTS.map((req) => ({
+    ...req,
+    present: assetTypeSet.has(req.type),
+    count: product.assets.filter((a) => a.assetType === req.type).length,
+  }));
+
+  const requiredMissing = completenessItems.filter((i) => i.required && !i.present);
 
   return (
     <>
       <Header title={product.title} subtitle={`${product.company.name} · ${product.sku || 'No SKU'}`} />
       <div className="p-6 space-y-6">
+        {/* Hidden replace input */}
+        <input ref={replaceInputRef} type="file" className="hidden" onChange={handleReplaceFile} accept=".glb,.gltf,.usdz,.jpg,.jpeg,.png,.webp" />
+
         {/* Back button */}
         <button onClick={() => router.push('/dashboard/products')} className="btn-ghost text-sm">
           <ArrowLeft className="w-4 h-4" /> Back to Products
@@ -142,20 +182,26 @@ export default function ProductDetailPage() {
                     ar
                     ar-modes="webxr scene-viewer quick-look"
                     shadow-intensity="1"
+                    touch-action="pan-y"
                     style="width:100%;height:100%;"
                   ></model-viewer>`
                 }} />
               ) : (
                 <div className="text-center">
                   <Box className="w-16 h-16 text-surface-300 mx-auto mb-3" />
-                  <p className="text-sm text-surface-500">Upload a GLB model to preview</p>
+                  <p className="text-sm text-surface-500 mb-1">No 3D model uploaded</p>
+                  <p className="text-xs text-surface-400 mb-4">Upload a GLB file to see a preview</p>
+                  <button onClick={() => handleQuickUpload('MODEL_GLB')} className="btn-primary text-sm">
+                    <Upload className="w-4 h-4" /> Upload GLB Model
+                  </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Product Info */}
+          {/* Right sidebar */}
           <div className="space-y-4">
+            {/* Product Info */}
             <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-surface-900">Details</h3>
@@ -183,6 +229,10 @@ export default function ProductDetailPage() {
                     <input type="text" className="input" value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
                   </div>
                   <div>
+                    <label className="label">Description</label>
+                    <textarea className="input h-20 resize-none" value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+                  </div>
+                  <div>
                     <label className="label">Status</label>
                     <select className="input" value={editForm.status} onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}>
                       <option value="DRAFT">Draft</option>
@@ -199,19 +249,67 @@ export default function ProductDetailPage() {
                   <div className="flex justify-between"><span className="text-surface-500">Scale</span><span className="text-surface-800">{product.scalePreset}x</span></div>
                   <div className="flex justify-between"><span className="text-surface-500">Anchor</span><span className="text-surface-800">{product.anchorType}</span></div>
                   <div className="flex justify-between"><span className="text-surface-500">Created</span><span className="text-surface-800">{formatDate(product.createdAt)}</span></div>
+                  {product.description && (
+                    <div className="pt-2 border-t border-surface-100">
+                      <p className="text-surface-500 mb-1">Description</p>
+                      <p className="text-surface-700 text-xs leading-relaxed">{product.description}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
-            {/* Completeness */}
+            {/* Asset Completeness */}
             <div className="card p-5">
               <h3 className="font-semibold text-surface-900 mb-3">Asset Completeness</h3>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mb-4">
                 <div className="flex-1 h-3 bg-surface-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-brand-500 to-brand-400 rounded-full transition-all" style={{ width: `${product.assetCompletenessScore}%` }} />
+                  <div
+                    className={`h-full rounded-full transition-all ${
+                      product.assetCompletenessScore >= 80 ? 'bg-emerald-500' :
+                      product.assetCompletenessScore >= 50 ? 'bg-amber-500' :
+                      'bg-red-400'
+                    }`}
+                    style={{ width: `${product.assetCompletenessScore}%` }}
+                  />
                 </div>
                 <span className="text-sm font-bold text-surface-900">{product.assetCompletenessScore}%</span>
               </div>
+
+              <div className="space-y-2">
+                {completenessItems.map((item) => (
+                  <div key={item.type} className="flex items-center gap-2 text-xs">
+                    {item.present ? (
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+                    ) : item.required ? (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    ) : (
+                      <div className="w-3.5 h-3.5 rounded-full border border-surface-300 flex-shrink-0" />
+                    )}
+                    <span className={item.present ? 'text-surface-700' : 'text-surface-400'}>
+                      {item.label}
+                      {item.count > 1 && <span className="text-surface-400 ml-1">({item.count})</span>}
+                    </span>
+                    {!item.present && (
+                      <button
+                        onClick={() => handleQuickUpload(item.type)}
+                        className="ml-auto text-brand-600 hover:text-brand-700 font-medium"
+                      >
+                        Add
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {requiredMissing.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-surface-100">
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    {requiredMissing.length} required asset{requiredMissing.length > 1 ? 's' : ''} missing
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Tags */}
@@ -228,9 +326,16 @@ export default function ProductDetailPage() {
 
             {/* Linked Experiences */}
             <div className="card p-5">
-              <h3 className="font-semibold text-surface-900 mb-3">Experiences</h3>
+              <h3 className="font-semibold text-surface-900 mb-3 flex items-center gap-2">
+                <Layers className="w-4 h-4" /> Experiences
+              </h3>
               {product.experiences.length === 0 ? (
-                <p className="text-sm text-surface-400">No experiences linked</p>
+                <div>
+                  <p className="text-sm text-surface-400 mb-2">No experiences linked</p>
+                  <a href="/dashboard/experiences" className="text-xs text-brand-600 hover:text-brand-700 font-medium">
+                    Create Experience →
+                  </a>
+                </div>
               ) : (
                 <div className="space-y-2">
                   {product.experiences.map((exp) => (
@@ -248,43 +353,101 @@ export default function ProductDetailPage() {
           </div>
         </div>
 
-        {/* Assets Section */}
+        {/* Asset Upload Zone */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-semibold text-surface-900">Upload Assets</h3>
+              <p className="text-sm text-surface-500">
+                Drag and drop files or click to browse. Files are organized by type automatically.
+              </p>
+            </div>
+            {!showUploadZone && (
+              <button onClick={() => { setUploadAssetType(undefined); setShowUploadZone(true); }} className="btn-primary">
+                <Upload className="w-4 h-4" /> Upload
+              </button>
+            )}
+          </div>
+
+          {showUploadZone && (
+            <div className="mb-6">
+              {uploadAssetType && (
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-sm text-surface-600">Uploading as:</span>
+                  <span className="badge-primary">{uploadAssetType.replace(/_/g, ' ')}</span>
+                  <button onClick={() => setUploadAssetType(undefined)} className="text-xs text-surface-400 hover:text-surface-600">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+              <FileUploadZone
+                productId={product.id}
+                assetType={uploadAssetType}
+                label={uploadAssetType ? `Drop ${uploadAssetType.replace(/_/g, ' ').toLowerCase()} here` : 'Drop files here to upload'}
+                onUploadComplete={(result) => {
+                  if (result.success) {
+                    loadProduct();
+                    setTimeout(() => setShowUploadZone(false), 2000);
+                  }
+                }}
+              />
+              <div className="flex justify-end mt-3">
+                <button onClick={() => setShowUploadZone(false)} className="btn-ghost text-xs">
+                  Close Upload Zone
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Quick upload slots for missing types */}
+          {!showUploadZone && requiredMissing.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
+              {requiredMissing.map((req) => (
+                <FileUploadZone
+                  key={req.type}
+                  productId={product.id}
+                  assetType={req.type}
+                  compact
+                  label={`Add ${req.label}`}
+                  onUploadComplete={(result) => {
+                    if (result.success) loadProduct();
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Asset Grid */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="font-semibold text-surface-900">Assets</h3>
-              <p className="text-sm text-surface-500">{product.assets.length} files uploaded</p>
-            </div>
-            <div>
-              <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} accept=".glb,.gltf,.usdz,.jpg,.jpeg,.png,.webp" />
-              <button onClick={() => fileInputRef.current?.click()} className="btn-primary" disabled={uploading}>
-                <Upload className="w-4 h-4" /> {uploading ? 'Uploading...' : 'Upload Asset'}
-              </button>
+              <p className="text-sm text-surface-500">{product.assets.length} file{product.assets.length !== 1 ? 's' : ''} uploaded</p>
             </div>
           </div>
 
           {product.assets.length === 0 ? (
             <div className="py-12 text-center">
               <FileImage className="w-12 h-12 text-surface-300 mx-auto mb-3" />
-              <p className="text-sm text-surface-500">No assets uploaded yet</p>
-              <p className="text-xs text-surface-400">Upload GLB, GLTF, USDZ, or image files</p>
+              <p className="text-sm text-surface-500 mb-1">No assets uploaded yet</p>
+              <p className="text-xs text-surface-400 mb-4">Upload GLB, GLTF, USDZ, or image files to get started</p>
+              <button onClick={() => { setUploadAssetType(undefined); setShowUploadZone(true); }} className="btn-primary text-sm">
+                <Upload className="w-4 h-4" /> Upload First Asset
+              </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {product.assets.map((asset) => {
-                const Icon = ASSET_TYPE_ICONS[asset.assetType] || FileImage;
-                return (
-                  <div key={asset.id} className="flex items-center gap-3 p-3 rounded-lg border border-surface-200 hover:border-surface-300 transition-colors">
-                    <div className="w-10 h-10 rounded-lg bg-surface-50 flex items-center justify-center flex-shrink-0">
-                      <Icon className="w-5 h-5 text-surface-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-surface-800 truncate">{asset.fileName}</p>
-                      <p className="text-xs text-surface-400">{asset.assetType.replace(/_/g, ' ')} · {formatBytes(asset.fileSize)}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {product.assets.map((asset) => (
+                <AssetCard
+                  key={asset.id}
+                  asset={asset}
+                  onDelete={handleDeleteAsset}
+                  onChangeType={handleChangeType}
+                  onReplace={handleReplaceStart}
+                  isDeleting={deletingAssetId === asset.id}
+                />
+              ))}
             </div>
           )}
         </div>

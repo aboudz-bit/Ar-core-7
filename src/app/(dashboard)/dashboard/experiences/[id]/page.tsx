@@ -6,8 +6,17 @@ import { Header } from '@/components/dashboard/Header';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import {
-  ArrowLeft, Save, ExternalLink, Copy, Send, Archive, Eye, Globe, Code, QrCode
+  ArrowLeft, Save, ExternalLink, Copy, Send, Archive, Eye, Globe, Code, QrCode,
+  AlertTriangle, CheckCircle, Box, Smartphone, Target, Image as ImageIcon
 } from 'lucide-react';
+
+interface AssetInfo {
+  id: string;
+  assetType: string;
+  filePath: string;
+  fileName: string;
+  fileSize: number;
+}
 
 interface ExperienceDetail {
   id: string;
@@ -25,10 +34,18 @@ interface ExperienceDetail {
   product: {
     id: string;
     title: string;
-    assets: { id: string; assetType: string; filePath: string; fileName: string }[];
+    assets: AssetInfo[];
   } | null;
   publishRecords: { id: string; publishStatus: string; publicUrl: string | null; embedSnippet: string | null; publishedAt: string | null }[];
 }
+
+const EXPERIENCE_TYPE_NEEDS: Record<string, string[]> = {
+  PRODUCT_VIEWER: ['MODEL_GLB'],
+  SURFACE_AR: ['MODEL_GLB'],
+  IMAGE_TARGET: ['MODEL_GLB', 'TARGET_IMAGE'],
+  QR_LAUNCH: ['MODEL_GLB'],
+  EMBED_VIEWER: ['MODEL_GLB'],
+};
 
 export default function ExperienceDetailPage() {
   const params = useParams();
@@ -97,6 +114,16 @@ export default function ExperienceDetailPage() {
   const publicUrl = `${appUrl}/ar/${experience.slug}`;
   const viewerUrl = experience.product ? `${appUrl}/viewer/${experience.company.slug}/${experience.product.title.toLowerCase().replace(/\s+/g, '-')}` : null;
 
+  // Asset analysis
+  const productAssetTypes = new Set(experience.product?.assets.map((a) => a.assetType) || []);
+  const requiredAssets = EXPERIENCE_TYPE_NEEDS[experience.experienceType] || ['MODEL_GLB'];
+  const missingAssets = requiredAssets.filter((need) => !productAssetTypes.has(need));
+  const hasModel = productAssetTypes.has('MODEL_GLB') || productAssetTypes.has('MODEL_GLTF');
+  const hasTargetImage = productAssetTypes.has('TARGET_IMAGE');
+  const hasPoster = productAssetTypes.has('POSTER');
+  const hasUsdz = productAssetTypes.has('MODEL_USDZ');
+  const isReady = experience.product && missingAssets.length === 0;
+
   return (
     <>
       <Header title={experience.name} subtitle={`${experience.experienceType.replace(/_/g, ' ')} · ${experience.company.name}`} />
@@ -104,6 +131,35 @@ export default function ExperienceDetailPage() {
         <button onClick={() => router.push('/dashboard/experiences')} className="btn-ghost text-sm">
           <ArrowLeft className="w-4 h-4" /> Back to Experiences
         </button>
+
+        {/* Missing assets warning banner */}
+        {experience.product && missingAssets.length > 0 && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-800">Missing required assets</p>
+              <p className="text-xs text-amber-700 mt-1">
+                This experience needs: {missingAssets.map((a) => a.replace(/_/g, ' ')).join(', ')}.
+                The AR experience will not work until these are uploaded.
+              </p>
+              <a href={`/dashboard/products/${experience.product.id}`} className="btn-secondary text-xs mt-2 inline-flex items-center gap-1">
+                Upload Assets →
+              </a>
+            </div>
+          </div>
+        )}
+
+        {!experience.product && (
+          <div className="rounded-xl border border-surface-200 bg-surface-50 p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-surface-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-surface-700">No product linked</p>
+              <p className="text-xs text-surface-500 mt-1">
+                Link a product with uploaded assets to enable the AR experience.
+              </p>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Config Panel */}
@@ -157,18 +213,54 @@ export default function ExperienceDetailPage() {
               </div>
             </div>
 
-            {/* Preview */}
+            {/* Linked Product & Assets */}
             {experience.product && (
               <div className="card p-6">
-                <h3 className="font-semibold text-surface-900 mb-4">Linked Product</h3>
-                <div className="flex items-center gap-4 p-4 rounded-lg bg-surface-50">
+                <h3 className="font-semibold text-surface-900 mb-4">Linked Product & Assets</h3>
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-surface-50 mb-4">
                   <div className="w-16 h-16 rounded-lg bg-surface-200 flex items-center justify-center">
                     <Eye className="w-6 h-6 text-surface-400" />
                   </div>
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium text-surface-900">{experience.product.title}</p>
                     <p className="text-sm text-surface-500">{experience.product.assets.length} assets</p>
                   </div>
+                  <a href={`/dashboard/products/${experience.product.id}`} className="btn-ghost text-sm">
+                    Manage Assets →
+                  </a>
+                </div>
+
+                {/* Asset status grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: '3D Model', present: hasModel, icon: Box, type: 'MODEL_GLB' },
+                    { label: 'Poster', present: hasPoster, icon: ImageIcon, type: 'POSTER' },
+                    { label: 'Target Image', present: hasTargetImage, icon: Target, type: 'TARGET_IMAGE' },
+                    { label: 'USDZ (iOS)', present: hasUsdz, icon: Smartphone, type: 'MODEL_USDZ' },
+                  ].map((item) => {
+                    const isRequired = requiredAssets.includes(item.type);
+                    return (
+                      <div key={item.label} className={`p-3 rounded-lg border text-center ${
+                        item.present
+                          ? 'border-emerald-200 bg-emerald-50'
+                          : isRequired
+                            ? 'border-amber-200 bg-amber-50'
+                            : 'border-surface-200 bg-surface-50'
+                      }`}>
+                        <item.icon className={`w-5 h-5 mx-auto mb-1 ${
+                          item.present ? 'text-emerald-600' : isRequired ? 'text-amber-500' : 'text-surface-400'
+                        }`} />
+                        <p className={`text-xs font-medium ${
+                          item.present ? 'text-emerald-700' : isRequired ? 'text-amber-700' : 'text-surface-500'
+                        }`}>{item.label}</p>
+                        <p className={`text-[10px] mt-0.5 ${
+                          item.present ? 'text-emerald-500' : isRequired ? 'text-amber-500' : 'text-surface-400'
+                        }`}>
+                          {item.present ? 'Ready' : isRequired ? 'Required' : 'Optional'}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -182,9 +274,24 @@ export default function ExperienceDetailPage() {
                 <StatusBadge status={experience.publishStatus} />
                 <span className="text-sm text-surface-500">{experience.slug}</span>
               </div>
+
+              {/* Readiness indicator */}
+              <div className={`rounded-lg p-3 mb-4 ${isReady ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+                <div className="flex items-center gap-2">
+                  {isReady ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                  )}
+                  <span className={`text-xs font-medium ${isReady ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {isReady ? 'Ready to publish' : 'Not ready — assets missing'}
+                  </span>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 {experience.publishStatus !== 'PUBLISHED' && (
-                  <button onClick={() => handlePublish('publish')} className="btn-primary w-full" disabled={publishing}>
+                  <button onClick={() => handlePublish('publish')} className="btn-primary w-full" disabled={publishing || !isReady}>
                     <Send className="w-4 h-4" /> Publish
                   </button>
                 )}
