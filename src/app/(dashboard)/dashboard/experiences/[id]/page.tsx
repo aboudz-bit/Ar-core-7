@@ -6,8 +6,8 @@ import { Header } from '@/components/dashboard/Header';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import {
-  ArrowLeft, Save, ExternalLink, Copy, Send, Archive, Eye, Globe, Code, QrCode,
-  AlertTriangle, CheckCircle, Box, Smartphone, Target, Image as ImageIcon
+  ArrowLeft, Save, ExternalLink, Copy, Send, Archive, Eye, Globe, Code, QrCode, Smartphone,
+  AlertTriangle, CheckCircle, Box, Target, Image as ImageIcon
 } from 'lucide-react';
 
 interface AssetInfo {
@@ -112,6 +112,8 @@ export default function ExperienceDetailPage() {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const publicUrl = `${appUrl}/ar/${experience.slug}`;
+  const embedUrl = `${appUrl}/embed/${experience.slug}`;
+  const launchUrl = `${appUrl}/launch/${experience.slug}`;
   const viewerUrl = experience.product ? `${appUrl}/viewer/${experience.company.slug}/${experience.product.title.toLowerCase().replace(/\s+/g, '-')}` : null;
 
   // Asset analysis
@@ -310,7 +312,7 @@ export default function ExperienceDetailPage() {
 
             {experience.publishStatus === 'PUBLISHED' && (
               <div className="card p-5">
-                <h3 className="font-semibold text-surface-900 mb-4">Share Links</h3>
+                <h3 className="font-semibold text-surface-900 mb-4">Share & Embed</h3>
                 <div className="space-y-3">
                   <div>
                     <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Globe className="w-3 h-3" /> Public URL</p>
@@ -326,9 +328,36 @@ export default function ExperienceDetailPage() {
                     {copied === 'url' && <p className="text-xs text-emerald-600 mt-1">Copied!</p>}
                   </div>
 
+                  <div>
+                    <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Code className="w-3 h-3" /> Embed (iframe)</p>
+                    <textarea
+                      readOnly
+                      className="input text-xs h-16 font-mono"
+                      value={`<iframe src="${embedUrl}" style="width:100%;height:600px;border:0;" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`}
+                    />
+                    <button onClick={() => copyToClipboard(`<iframe src="${embedUrl}" style="width:100%;height:600px;border:0;" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`, 'embed')} className="btn-ghost text-xs mt-1">
+                      <Copy className="w-3 h-3" /> Copy Embed Code
+                    </button>
+                    {copied === 'embed' && <p className="text-xs text-emerald-600 mt-1">Copied!</p>}
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Smartphone className="w-3 h-3" /> Direct AR Launch</p>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs bg-surface-50 px-2 py-1.5 rounded flex-1 truncate">{launchUrl}</code>
+                      <button onClick={() => copyToClipboard(launchUrl, 'launch')} className="btn-ghost p-1.5">
+                        <Copy className="w-3.5 h-3.5" />
+                      </button>
+                      <a href={launchUrl} target="_blank" className="btn-ghost p-1.5">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                    {copied === 'launch' && <p className="text-xs text-emerald-600 mt-1">Copied!</p>}
+                  </div>
+
                   {viewerUrl && (
                     <div>
-                      <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Eye className="w-3 h-3" /> Viewer URL</p>
+                      <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Eye className="w-3 h-3" /> Product Viewer</p>
                       <div className="flex items-center gap-2">
                         <code className="text-xs bg-surface-50 px-2 py-1.5 rounded flex-1 truncate">{viewerUrl}</code>
                         <button onClick={() => copyToClipboard(viewerUrl, 'viewer')} className="btn-ghost p-1.5">
@@ -340,23 +369,15 @@ export default function ExperienceDetailPage() {
                   )}
 
                   <div>
-                    <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><Code className="w-3 h-3" /> Embed</p>
-                    <textarea
-                      readOnly
-                      className="input text-xs h-16 font-mono"
-                      value={`<iframe src="${publicUrl}?embed=true" width="100%" height="500" frameborder="0" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`}
-                    />
-                    <button onClick={() => copyToClipboard(`<iframe src="${publicUrl}?embed=true" width="100%" height="500" frameborder="0" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`, 'embed')} className="btn-ghost text-xs mt-1">
-                      <Copy className="w-3 h-3" /> Copy Embed Code
-                    </button>
-                    {copied === 'embed' && <p className="text-xs text-emerald-600 mt-1">Copied!</p>}
-                  </div>
-
-                  <div>
                     <p className="text-xs font-medium text-surface-500 mb-1 flex items-center gap-1"><QrCode className="w-3 h-3" /> QR Code</p>
                     <a href={`/qr/${experience.slug}`} target="_blank" className="btn-secondary w-full text-sm">
                       <QrCode className="w-4 h-4" /> Open QR Page
                     </a>
+                  </div>
+
+                  <div className="pt-2 border-t border-surface-100">
+                    <p className="text-xs font-medium text-surface-500 mb-1">Public API</p>
+                    <code className="text-[11px] text-surface-600 block break-all">GET /api/public/experiences/{experience.slug}</code>
                   </div>
                 </div>
               </div>

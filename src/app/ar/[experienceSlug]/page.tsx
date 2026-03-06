@@ -1,5 +1,5 @@
-import { prisma } from '@/lib/prisma';
 import { notFound } from 'next/navigation';
+import { getViewerData } from '@/lib/viewer';
 import { ArExperienceClient } from './ArExperienceClient';
 
 interface Props {
@@ -7,48 +7,35 @@ interface Props {
 }
 
 export default async function ArExperiencePage({ params }: Props) {
-  const experience = await prisma.experience.findUnique({
-    where: { slug: params.experienceSlug },
-    include: {
-      company: true,
-      product: { include: { assets: true } },
-    },
-  });
-
-  if (!experience || experience.publishStatus !== 'PUBLISHED') {
-    return notFound();
-  }
-
-  const glbAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_GLB');
-  const usdzAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_USDZ');
-  const posterAsset = experience.product?.assets.find((a) => a.assetType === 'POSTER');
-  const targetAsset = experience.product?.assets.find((a) => a.assetType === 'TARGET_IMAGE');
+  const data = await getViewerData(params.experienceSlug);
+  if (!data) return notFound();
 
   return (
     <ArExperienceClient
       experience={{
-        id: experience.id,
-        name: experience.name,
-        slug: experience.slug,
-        type: experience.experienceType,
-        scale: experience.scale,
-        lightingPreset: experience.lightingPreset,
-        ctaText: experience.ctaText,
-        ctaLink: experience.ctaLink,
+        id: data.experience.id,
+        name: data.experience.name,
+        slug: data.experience.slug,
+        type: data.experience.type,
+        scale: data.experience.scale,
+        lightingPreset: data.experience.lightingPreset,
+        ctaText: data.experience.ctaText,
+        ctaLink: data.experience.ctaLink,
       }}
-      product={experience.product ? {
-        id: experience.product.id,
-        title: experience.product.title,
-        modelUrl: glbAsset?.filePath || null,
-        usdzUrl: usdzAsset?.filePath || null,
-        posterUrl: posterAsset?.filePath || null,
-        targetImageUrl: targetAsset?.filePath || null,
+      product={data.product ? {
+        id: data.product.id,
+        title: data.product.title,
+        modelUrl: data.product.modelUrl,
+        usdzUrl: data.product.usdzUrl,
+        posterUrl: data.product.posterUrl,
+        targetImageUrl: data.product.targetImageUrl,
       } : null}
       company={{
-        id: experience.company.id,
-        name: experience.company.name,
-        brandPrimary: experience.company.brandPrimary,
+        id: data.company.id,
+        name: data.company.name,
+        brandPrimary: data.company.brandPrimary,
       }}
+      branding={data.branding}
     />
   );
 }

@@ -27,9 +27,14 @@ interface Props {
     name: string;
     brandPrimary: string;
   };
+  branding?: {
+    hideBranding: boolean;
+    viewerBackground: string;
+    logoUrl: string | null;
+  };
 }
 
-export function ArExperienceClient({ experience, product, company }: Props) {
+export function ArExperienceClient({ experience, product, company, branding }: Props) {
   const [arSupported, setArSupported] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -143,9 +148,11 @@ export function ArExperienceClient({ experience, product, company }: Props) {
           </div>
         )}
 
-        <footer className="px-4 py-2 text-center">
-          <p className="text-[10px] text-surface-300">Powered by AR-core-7</p>
-        </footer>
+        {!branding?.hideBranding && (
+          <footer className="px-4 py-2 text-center">
+            <p className="text-[10px] text-surface-300">Powered by AR-core-7</p>
+          </footer>
+        )}
       </div>
     );
   }
@@ -173,9 +180,11 @@ export function ArExperienceClient({ experience, product, company }: Props) {
             <img src={product.targetImageUrl} alt="Target" className="w-32 h-32 object-cover rounded-lg border-2 border-white/20" />
           </div>
         )}
-        <footer className="absolute bottom-4">
-          <p className="text-[10px] text-white/20">Powered by AR-core-7</p>
-        </footer>
+        {!branding?.hideBranding && (
+          <footer className="absolute bottom-4">
+            <p className="text-[10px] text-white/20">Powered by AR-core-7</p>
+          </footer>
+        )}
       </div>
     );
   }

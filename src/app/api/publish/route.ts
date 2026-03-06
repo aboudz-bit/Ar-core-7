@@ -40,8 +40,10 @@ export async function POST(req: NextRequest) {
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const publicUrl = `${appUrl}/ar/${experience.slug}`;
-  const embedSnippet = `<iframe src="${publicUrl}?embed=true" width="100%" height="500" frameborder="0" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`;
+  const embedUrl = `${appUrl}/embed/${experience.slug}`;
+  const embedSnippet = `<iframe src="${embedUrl}" style="width:100%;height:600px;border:0;" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`;
   const qrCodeUrl = `${appUrl}/qr/${experience.slug}`;
+  const launchUrl = `${appUrl}/launch/${experience.slug}`;
 
   await prisma.$transaction([
     prisma.experience.update({
@@ -75,7 +77,9 @@ export async function POST(req: NextRequest) {
     data: {
       status: newStatus,
       publicUrl: newStatus === 'PUBLISHED' ? publicUrl : null,
+      embedUrl: newStatus === 'PUBLISHED' ? embedUrl : null,
       embedSnippet: newStatus === 'PUBLISHED' ? embedSnippet : null,
+      launchUrl: newStatus === 'PUBLISHED' ? launchUrl : null,
       qrCodeUrl: newStatus === 'PUBLISHED' ? qrCodeUrl : null,
     },
   });

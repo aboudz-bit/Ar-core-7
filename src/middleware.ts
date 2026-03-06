@@ -9,7 +9,11 @@ const publicPaths = [
   '/ar',
   '/qr',
   '/demo',
+  '/embed',
+  '/launch',
+  '/product',
   '/api/analytics/track',
+  '/api/public',
 ];
 
 export function middleware(request: NextRequest) {
