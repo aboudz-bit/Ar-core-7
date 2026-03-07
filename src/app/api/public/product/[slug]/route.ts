@@ -33,14 +33,13 @@ export async function GET(
     return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const glbAsset = product.assets.find((a) => a.assetType === 'MODEL_GLB');
   const posterAsset = product.assets.find((a) => a.assetType === 'POSTER');
 
   return NextResponse.json({
     name: product.title,
-    model: glbAsset ? `${appUrl}${glbAsset.filePath}` : null,
-    poster: posterAsset ? `${appUrl}${posterAsset.filePath}` : null,
+    model: glbAsset ? glbAsset.filePath : null,
+    poster: posterAsset ? posterAsset.filePath : null,
     tracking: 'surface',
     description: product.description,
     company: product.company.name,
