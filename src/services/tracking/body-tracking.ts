@@ -187,17 +187,8 @@ export function isBodyTrackingSupported(): { supported: boolean; reason?: string
 export async function loadPoseDetector(config: BodyTrackingConfig = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
-  const { Pose } = await import('@mediapipe/pose') as {
-    Pose: new (opts: { locateFile: (file: string) => string }) => {
-      setOptions: (opts: Record<string, unknown>) => void;
-      onResults: (cb: (results: {
-        poseLandmarks?: BodyLandmark[];
-        poseWorldLandmarks?: BodyLandmark[];
-      }) => void) => void;
-      send: (input: { image: HTMLVideoElement }) => Promise<void>;
-      close: () => void;
-    };
-  };
+  const { loadPoseLib } = await import('@/lib/mediapipe-loader');
+  const Pose = await loadPoseLib();
 
   const pose = new Pose({
     locateFile: (file: string) =>

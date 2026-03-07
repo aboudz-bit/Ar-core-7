@@ -115,15 +115,9 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
 
     async function initFaceMesh() {
       try {
-        // Dynamically load MediaPipe Face Mesh from CDN
-        const { FaceMesh } = await import('@mediapipe/face_mesh') as {
-          FaceMesh: new (config: { locateFile: (file: string) => string }) => {
-            setOptions: (opts: Record<string, unknown>) => void;
-            onResults: (cb: (results: { multiFaceLandmarks?: FaceLandmark[][] }) => void) => void;
-            send: (input: { image: HTMLVideoElement }) => Promise<void>;
-            close: () => void;
-          };
-        };
+        // Load MediaPipe Face Mesh from CDN via script injection
+        const { loadFaceMeshLib } = await import('@/lib/mediapipe-loader');
+        const FaceMesh = await loadFaceMeshLib();
 
         if (cancelled) return;
 

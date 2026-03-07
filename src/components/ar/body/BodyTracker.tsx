@@ -52,17 +52,9 @@ export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) 
 
     async function initPose() {
       try {
-        const { Pose } = await import('@mediapipe/pose') as {
-          Pose: new (config: { locateFile: (file: string) => string }) => {
-            setOptions: (opts: Record<string, unknown>) => void;
-            onResults: (cb: (results: {
-              poseLandmarks?: BodyLandmark[];
-              poseWorldLandmarks?: BodyLandmark[];
-            }) => void) => void;
-            send: (input: { image: HTMLVideoElement }) => Promise<void>;
-            close: () => void;
-          };
-        };
+        // Load MediaPipe Pose from CDN via script injection
+        const { loadPoseLib } = await import('@/lib/mediapipe-loader');
+        const Pose = await loadPoseLib();
 
         if (cancelled) return;
 

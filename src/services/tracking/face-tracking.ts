@@ -153,14 +153,8 @@ export function isFaceTrackingSupported(): { supported: boolean; reason?: string
 export async function loadFaceMesh(config: FaceTrackingConfig = {}) {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
-  const { FaceMesh } = await import('@mediapipe/face_mesh') as {
-    FaceMesh: new (opts: { locateFile: (file: string) => string }) => {
-      setOptions: (opts: Record<string, unknown>) => void;
-      onResults: (cb: (results: { multiFaceLandmarks?: FaceLandmark[][] }) => void) => void;
-      send: (input: { image: HTMLVideoElement }) => Promise<void>;
-      close: () => void;
-    };
-  };
+  const { loadFaceMeshLib } = await import('@/lib/mediapipe-loader');
+  const FaceMesh = await loadFaceMeshLib();
 
   const faceMesh = new FaceMesh({
     locateFile: (file: string) =>
