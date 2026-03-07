@@ -2,19 +2,27 @@
  * Size Recommendation Engine
  *
  * Recommends the best clothing size based on body measurements, user profile,
- * and garment metadata (size chart + fit type + category).
+ * and garment metadata (size chart + fit type + category + product specs).
  *
  * HONEST DISCLAIMER:
  * This is a rule-based heuristic engine, NOT a machine-learning model.
  * It uses:
  *   - Body measurement matching against a size chart (measurement-driven)
  *   - Category-specific default size charts for thobe, abaya, t-shirt, jacket (heuristic)
+ *   - Product-level garment specs when provided (garmentLength, sleeveLength, etc.)
  *   - BMI-based build estimation (heuristic)
  *   - Fit-type bias (rule-based)
  *   - Height/weight fallback tables when measurements are unavailable (approximation)
  *
  * Results are approximate. Real-world sizing varies between brands, cuts,
  * fabrics, and individual body proportions.
+ *
+ * SEPARATION OF CONCERNS:
+ *   - "chart-match": Product-specific size chart provided → direct matching (best accuracy)
+ *   - "category-default": Using built-in category default charts (good accuracy for standard sizing)
+ *   - "measurements-only": No chart, using generic shoulder→size mapping (moderate accuracy)
+ *   - "profile-heuristic": Only height/weight → BMI bucket estimation (low accuracy)
+ *   - "fallback": No data at all → default size (very low accuracy)
  *
  * Production upgrade path:
  *   - Brand-specific sizing models trained on return/exchange data
@@ -24,11 +32,6 @@
 
 import type { BodyMeasurements } from '@/services/body/body-measurements';
 
-// ---------------------------------------------------------------------------
-// Public types
-// ---------------------------------------------------------------------------
-
-/** Measurements for a single size in a garment's size chart (all in cm). */
 export interface SizeChartEntry {
   chest?: number;
   shoulder?: number;
@@ -38,7 +41,6 @@ export interface SizeChartEntry {
   sleeve?: number;
 }
 
-/** Map of size label → measurements. */
 export type SizeChart = Record<string, SizeChartEntry>;
 
 export type FitType = 'slim' | 'regular' | 'oversized' | 'loose';
@@ -55,6 +57,10 @@ export interface GarmentMetadata {
   fitType?: FitType;
   category?: GarmentCategory;
   sizingSystem?: SizingSystem;
+  garmentLength?: number;
+  sleeveLength?: number;
+  shoulderSpec?: number;
+  chestSpec?: number;
 }
 
 export interface UserProfile {
@@ -78,16 +84,18 @@ export interface SizeRecommendation {
   reasoning: string;
   category?: GarmentCategory;
   sizingSystem?: SizingSystem;
+  dataSource: 'product-specific' | 'category-default' | 'generic-fallback';
+  measurementBasis: string;
 }
-
-// ---------------------------------------------------------------------------
-// Category-specific default size charts
-// ---------------------------------------------------------------------------
 
 /**
  * THOBE sizing — numeric system (52–64).
  * Based on Gulf/Saudi thobe sizing conventions.
- * Key measurements: height (garment length), shoulder width, chest, sleeve length.
+ *
+ * Category-specific rules:
+ *   Primary factors: height (garment length), shoulder width, sleeve length
+ *   Secondary: chest circumference
+ *   Thobe length is critical — it must reach near the ankle.
  *
  * HEURISTIC BASIS: Derived from common thobe manufacturer sizing guides.
  * Actual brand sizing varies significantly.
@@ -104,10 +112,14 @@ const THOBE_SIZE_CHART: SizeChart = {
 
 /**
  * ABAYA sizing — numeric system (50–60) or letter (S–XXL).
- * Default uses numeric. Abayas are typically loose-fitting.
+ * Default uses numeric.
+ *
+ * Category-specific rules:
+ *   Primary factors: height (full-body drape length), shoulder width
+ *   Abayas are inherently loose — fit type "loose" is the default behavior
+ *   Chest is less critical due to the flowing silhouette
  *
  * HEURISTIC BASIS: Based on common abaya sizing from Middle Eastern manufacturers.
- * Abayas prioritize length (full-body drape) and shoulder width.
  */
 const ABAYA_SIZE_CHART: SizeChart = {
   '50': { length: 138, shoulder: 38, chest: 98 },
@@ -128,7 +140,11 @@ const ABAYA_LETTER_CHART: SizeChart = {
 
 /**
  * T-SHIRT sizing — letter system (XS–XXXL).
- * Standard Western unisex sizing.
+ *
+ * Category-specific rules:
+ *   Primary factors: shoulder width, chest circumference
+ *   Secondary: fit type adjustment (slim = size down, oversized = size up)
+ *   Length is less critical for t-shirts
  *
  * HEURISTIC BASIS: Based on ISO 8559 body measurement standards,
  * adapted for retail t-shirt sizing.
@@ -145,7 +161,11 @@ const TSHIRT_SIZE_CHART: SizeChart = {
 
 /**
  * JACKET sizing — letter system (XS–XXXL).
- * Jackets typically run ~2cm wider per size than t-shirts.
+ *
+ * Category-specific rules:
+ *   Primary factors: shoulder width, chest circumference, sleeve length
+ *   Jackets run ~2cm wider per size than t-shirts
+ *   Sleeve length matters more than for t-shirts (full-length sleeves)
  *
  * HEURISTIC BASIS: Based on outerwear sizing conventions.
  */
@@ -174,10 +194,6 @@ function getDefaultSizingSystem(category: GarmentCategory): SizingSystem {
   if (category === 'thobe' || category === 'abaya') return 'numeric';
   return 'letter';
 }
-
-// ---------------------------------------------------------------------------
-// Internal constants
-// ---------------------------------------------------------------------------
 
 const STANDARD_SIZES = ['XXS', 'XS', 'S', 'M', 'L', 'XL', 'XXL', 'XXXL', '3XL', '4XL'] as const;
 
@@ -211,10 +227,6 @@ const HW_TABLE: Array<{ minBMI: number; maxBMI: number; sizes: Record<string, [n
     },
   },
 ];
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function sizeIndex(size: string): number {
   const normalized = size.toUpperCase().trim();
@@ -278,10 +290,6 @@ function estimateRealCm(
   return { shoulderCm, chestCm, hipCm, armLengthCm, torsoLengthCm };
 }
 
-// ---------------------------------------------------------------------------
-// Category-specific scoring weights
-// ---------------------------------------------------------------------------
-
 interface ScoringWeights {
   shoulder: number;
   chest: number;
@@ -290,6 +298,23 @@ interface ScoringWeights {
   sleeve: number;
 }
 
+/**
+ * Category-specific scoring weights.
+ *
+ * These weights determine which body measurements matter most for each category:
+ *
+ * THOBE: Length is most important (full-body garment), then shoulder + sleeve.
+ *        Chest is secondary because thobes have generous chest ease.
+ *
+ * ABAYA: Length is most important (must drape to ankle), then shoulder.
+ *        Chest/sleeve are less important due to loose, flowing cut.
+ *
+ * T-SHIRT/SHIRT/POLO: Shoulder and chest are primary (fitted upper body).
+ *        Length and sleeve are short, so less variation between sizes.
+ *
+ * JACKET/HOODIE/SWEATER: Shoulder and chest are primary, but sleeve
+ *        length matters more than t-shirts (full-length sleeves).
+ */
 function getCategoryWeights(category?: GarmentCategory): ScoringWeights {
   switch (category) {
     case 'thobe':
@@ -308,7 +333,15 @@ function getCategoryWeights(category?: GarmentCategory): ScoringWeights {
   }
 }
 
-function estimateGarmentLength(heightCm: number, category?: GarmentCategory): number {
+/**
+ * Estimate expected garment length based on user height and category.
+ * Product-level garmentLength overrides this when provided.
+ *
+ * HEURISTIC: Based on proportional body segmentation.
+ */
+function estimateGarmentLength(heightCm: number, category?: GarmentCategory, garmentLengthSpec?: number): number {
+  if (garmentLengthSpec && garmentLengthSpec > 0) return garmentLengthSpec;
+
   switch (category) {
     case 'thobe':
       return heightCm * 0.85;
@@ -323,10 +356,6 @@ function estimateGarmentLength(heightCm: number, category?: GarmentCategory): nu
       return heightCm * 0.42;
   }
 }
-
-// ---------------------------------------------------------------------------
-// FIT TYPE bias
-// ---------------------------------------------------------------------------
 
 function applyFitBias(
   size: string,
@@ -354,14 +383,22 @@ function applyFitBias(
   return { adjusted: size, fitPrediction: 'regular' };
 }
 
-// ---------------------------------------------------------------------------
-// Resolve chart: custom → category default → null
-// ---------------------------------------------------------------------------
+function inferSizingSystem(chart: SizeChart): SizingSystem {
+  const keys = Object.keys(chart);
+  const allNumeric = keys.every(k => /^\d+$/.test(k.trim()));
+  if (allNumeric) return 'numeric';
+  const allLetter = keys.every(k => STANDARD_SIZES.includes(k.toUpperCase().trim() as typeof STANDARD_SIZES[number]));
+  if (allLetter) return 'letter';
+  return 'custom';
+}
 
 function resolveChart(meta?: GarmentMetadata | null): { chart: SizeChart | null; source: 'custom' | 'category-default' | 'none'; category?: GarmentCategory } {
   const category = meta?.category;
   if (meta?.sizeChart && Object.keys(meta.sizeChart).length > 0) {
     return { chart: meta.sizeChart, source: 'custom', category };
+  }
+  if (category === 'abaya' && meta?.sizingSystem === 'letter') {
+    return { chart: ABAYA_LETTER_CHART, source: 'category-default', category };
   }
   if (category && DEFAULT_CHARTS[category]) {
     return { chart: DEFAULT_CHARTS[category]!, source: 'category-default', category };
@@ -369,37 +406,81 @@ function resolveChart(meta?: GarmentMetadata | null): { chart: SizeChart | null;
   return { chart: null, source: 'none', category };
 }
 
-// ---------------------------------------------------------------------------
-// Main recommendation function
-// ---------------------------------------------------------------------------
+function describeDataSource(chartSource: string): SizeRecommendation['dataSource'] {
+  if (chartSource === 'custom') return 'product-specific';
+  if (chartSource === 'category-default') return 'category-default';
+  return 'generic-fallback';
+}
+
+function describeMeasurementBasis(
+  hasMeasurements: boolean,
+  hasProfile: boolean,
+  category?: GarmentCategory,
+  specs?: GarmentMetadata | null,
+): string {
+  const parts: string[] = [];
+
+  if (hasMeasurements) parts.push('camera-detected body landmarks');
+  if (hasProfile) parts.push('user-provided height/weight');
+
+  if (specs?.garmentLength) parts.push(`product garment length: ${specs.garmentLength}cm`);
+  if (specs?.sleeveLength) parts.push(`product sleeve length: ${specs.sleeveLength}cm`);
+  if (specs?.shoulderSpec) parts.push(`product shoulder spec: ${specs.shoulderSpec}cm`);
+  if (specs?.chestSpec) parts.push(`product chest spec: ${specs.chestSpec}cm`);
+
+  if (parts.length === 0) parts.push('no measurements available');
+
+  return parts.join(', ');
+}
+
+function categoryMeasurementExplanation(category?: GarmentCategory): string {
+  switch (category) {
+    case 'thobe':
+      return 'Thobe sizing considers: height (garment length to ankle), shoulder width, torso height, arm length (full sleeve).';
+    case 'abaya':
+      return 'Abaya sizing considers: height (full drape length), shoulder width. Loose/flowing fit is inherent.';
+    case 't-shirt':
+    case 'shirt':
+    case 'polo':
+      return 'T-shirt/shirt sizing considers: shoulder width, chest circumference, fit type preference.';
+    case 'jacket':
+    case 'hoodie':
+    case 'sweater':
+      return 'Jacket/outerwear sizing considers: shoulder width, chest circumference, sleeve length.';
+    default:
+      return 'Generic sizing based on shoulder width and chest approximation.';
+  }
+}
 
 export function recommendSize(input: SizeRecommendationInput): SizeRecommendation {
   const { bodyMeasurements, userProfile, garmentMetadata } = input;
   const { chart, source: chartSource, category } = resolveChart(garmentMetadata);
   const fitType = garmentMetadata?.fitType;
-  const sizingSystem = garmentMetadata?.sizingSystem || (category ? getDefaultSizingSystem(category) : 'letter');
+  const sizingSystem = garmentMetadata?.sizingSystem
+    || (chart ? inferSizingSystem(chart) : null)
+    || (category ? getDefaultSizingSystem(category) : 'letter');
   const hasChart = !!chart;
   const hasMeasurements = !!bodyMeasurements;
   const hasProfile = !!userProfile && userProfile.heightCm > 0 && userProfile.weightKg > 0;
 
   if (hasChart && hasMeasurements && hasProfile) {
-    return matchAgainstChart(chart!, bodyMeasurements!, userProfile!, fitType, category, chartSource, sizingSystem);
+    return matchAgainstChart(chart!, bodyMeasurements!, userProfile!, fitType, category, chartSource, sizingSystem, garmentMetadata);
   }
 
   if (hasChart && hasProfile) {
-    return matchChartWithProfileOnly(chart!, userProfile!, fitType, category, chartSource, sizingSystem);
+    return matchChartWithProfileOnly(chart!, userProfile!, fitType, category, chartSource, sizingSystem, garmentMetadata);
   }
 
   if (hasChart && hasMeasurements) {
-    return matchChartMeasurementsOnly(chart!, bodyMeasurements!, fitType, category, chartSource, sizingSystem);
+    return matchChartMeasurementsOnly(chart!, bodyMeasurements!, fitType, category, chartSource, sizingSystem, garmentMetadata);
   }
 
   if (hasMeasurements && hasProfile) {
-    return estimateFromMeasurements(bodyMeasurements!, userProfile!, fitType, category, sizingSystem);
+    return estimateFromMeasurements(bodyMeasurements!, userProfile!, fitType, category, sizingSystem, garmentMetadata);
   }
 
   if (hasProfile) {
-    return fallbackFromProfile(userProfile!, fitType, category, sizingSystem);
+    return fallbackFromProfile(userProfile!, fitType, category, sizingSystem, garmentMetadata);
   }
 
   const defaultSize = sizingSystem === 'numeric' ? (category === 'thobe' ? '56' : '54') : 'M';
@@ -413,15 +494,13 @@ export function recommendSize(input: SizeRecommendationInput): SizeRecommendatio
     fitPrediction: 'regular',
     alternatives: defaultAlts,
     method: 'fallback',
-    reasoning: `No body measurements, user profile, or size chart available. Defaulting to ${defaultSize}.`,
+    reasoning: `No body measurements, user profile, or size chart available. Defaulting to ${defaultSize}. ${categoryMeasurementExplanation(category)}`,
     category,
     sizingSystem,
+    dataSource: 'generic-fallback',
+    measurementBasis: 'no measurements available',
   };
 }
-
-// ---------------------------------------------------------------------------
-// Strategy implementations
-// ---------------------------------------------------------------------------
 
 function scoreSize(
   entry: SizeChartEntry,
@@ -429,16 +508,20 @@ function scoreSize(
   heightCm: number,
   weights: ScoringWeights,
   category?: GarmentCategory,
+  specs?: GarmentMetadata | null,
 ): { score: number; factors: number } {
   let totalWeightedDiff = 0;
   let totalWeight = 0;
 
+  const effectiveShoulder = specs?.shoulderSpec || realCm.shoulderCm;
+  const effectiveChest = specs?.chestSpec || realCm.chestCm;
+
   if (entry.shoulder != null) {
-    totalWeightedDiff += Math.abs(realCm.shoulderCm - entry.shoulder) * weights.shoulder;
+    totalWeightedDiff += Math.abs(effectiveShoulder - entry.shoulder) * weights.shoulder;
     totalWeight += weights.shoulder;
   }
   if (entry.chest != null) {
-    totalWeightedDiff += Math.abs(realCm.chestCm - entry.chest) * weights.chest;
+    totalWeightedDiff += Math.abs(effectiveChest - entry.chest) * weights.chest;
     totalWeight += weights.chest;
   }
   if (entry.hip != null) {
@@ -446,12 +529,13 @@ function scoreSize(
     totalWeight += weights.hip;
   }
   if (entry.length != null) {
-    const estimatedLength = estimateGarmentLength(heightCm, category);
+    const estimatedLength = estimateGarmentLength(heightCm, category, specs?.garmentLength);
     totalWeightedDiff += Math.abs(estimatedLength - entry.length) * weights.length;
     totalWeight += weights.length;
   }
   if (entry.sleeve != null) {
-    totalWeightedDiff += Math.abs(realCm.armLengthCm - entry.sleeve) * weights.sleeve;
+    const effectiveSleeve = specs?.sleeveLength || realCm.armLengthCm;
+    totalWeightedDiff += Math.abs(effectiveSleeve - entry.sleeve) * weights.sleeve;
     totalWeight += weights.sleeve;
   }
 
@@ -467,6 +551,7 @@ function matchAgainstChart(
   category?: GarmentCategory,
   chartSource?: string,
   sizingSystem?: SizingSystem,
+  specs?: GarmentMetadata | null,
 ): SizeRecommendation {
   const sizes = Object.keys(chart);
   const realCm = estimateRealCm(measurements, profile.heightCm);
@@ -479,7 +564,7 @@ function matchAgainstChart(
 
   for (const size of sizes) {
     const entry = chart[size];
-    const { score } = scoreSize(entry, realCm, profile.heightCm, weights, category);
+    const { score } = scoreSize(entry, realCm, profile.heightCm, weights, category, specs);
     scores[size] = score;
     if (score < bestScore) {
       bestScore = score;
@@ -503,15 +588,12 @@ function matchAgainstChart(
   const dataRichness = Math.min(1, maxChartFields / 3);
   const closeness = Math.max(0, 1 - bestScore / 15);
   const sourceBonus = chartSource === 'custom' ? 0.05 : 0;
-  const confidence = Math.round(Math.min(0.95, (dataRichness * 0.4 + closeness * 0.4 + 0.15 + sourceBonus)) * 100) / 100;
+  const specsBonus = (specs?.garmentLength || specs?.sleeveLength || specs?.shoulderSpec || specs?.chestSpec) ? 0.03 : 0;
+  const confidence = Math.round(Math.min(0.95, (dataRichness * 0.4 + closeness * 0.4 + 0.15 + sourceBonus + specsBonus)) * 100) / 100;
 
   const categoryLabel = category && category !== 'other' ? ` for ${category}` : '';
   const chartLabel = chartSource === 'custom' ? 'product-specific' : 'category-default';
-  const measurementDetails = category === 'thobe'
-    ? `shoulder: ~${Math.round(realCm.shoulderCm)}cm, est. garment length: ~${Math.round(estimateGarmentLength(profile.heightCm, category))}cm, sleeve: ~${Math.round(realCm.armLengthCm)}cm`
-    : category === 'abaya'
-    ? `shoulder: ~${Math.round(realCm.shoulderCm)}cm, est. length: ~${Math.round(estimateGarmentLength(profile.heightCm, category))}cm`
-    : `shoulder: ~${Math.round(realCm.shoulderCm)}cm, chest: ~${Math.round(realCm.chestCm)}cm`;
+  const measurementDetails = buildMeasurementDetails(realCm, profile.heightCm, category, specs);
 
   return {
     recommendedSize: adjusted,
@@ -519,10 +601,47 @@ function matchAgainstChart(
     fitPrediction,
     alternatives: adjacentSizes(adjusted, chart),
     method: chartSource === 'category-default' ? 'category-default' : 'chart-match',
-    reasoning: `Matched body measurements (${measurementDetails}) against ${chartLabel} size chart${categoryLabel}. BMI ${Math.round(bmi)} considered.${fitType && fitType !== 'regular' ? ` Adjusted for ${fitType} fit.` : ''} [Heuristic: rule-based measurement matching, not ML.]`,
+    reasoning: `Matched body measurements (${measurementDetails}) against ${chartLabel} size chart${categoryLabel}. BMI ${Math.round(bmi)} considered.${fitType && fitType !== 'regular' ? ` Adjusted for ${fitType} fit.` : ''} ${categoryMeasurementExplanation(category)} [Heuristic: rule-based measurement matching, not ML.]`,
     category,
     sizingSystem,
+    dataSource: describeDataSource(chartSource || 'none'),
+    measurementBasis: describeMeasurementBasis(true, true, category, specs),
   };
+}
+
+function buildMeasurementDetails(
+  realCm: ReturnType<typeof estimateRealCm>,
+  heightCm: number,
+  category?: GarmentCategory,
+  specs?: GarmentMetadata | null,
+): string {
+  const parts: string[] = [];
+
+  switch (category) {
+    case 'thobe':
+      parts.push(`shoulder: ~${Math.round(specs?.shoulderSpec || realCm.shoulderCm)}cm`);
+      parts.push(`est. garment length: ~${Math.round(estimateGarmentLength(heightCm, category, specs?.garmentLength))}cm`);
+      parts.push(`sleeve: ~${Math.round(specs?.sleeveLength || realCm.armLengthCm)}cm`);
+      if (specs?.chestSpec) parts.push(`chest: ${specs.chestSpec}cm (product spec)`);
+      break;
+    case 'abaya':
+      parts.push(`shoulder: ~${Math.round(specs?.shoulderSpec || realCm.shoulderCm)}cm`);
+      parts.push(`est. length: ~${Math.round(estimateGarmentLength(heightCm, category, specs?.garmentLength))}cm`);
+      break;
+    case 'jacket':
+    case 'hoodie':
+    case 'sweater':
+      parts.push(`shoulder: ~${Math.round(specs?.shoulderSpec || realCm.shoulderCm)}cm`);
+      parts.push(`chest: ~${Math.round(specs?.chestSpec || realCm.chestCm)}cm`);
+      parts.push(`sleeve: ~${Math.round(specs?.sleeveLength || realCm.armLengthCm)}cm`);
+      break;
+    default:
+      parts.push(`shoulder: ~${Math.round(specs?.shoulderSpec || realCm.shoulderCm)}cm`);
+      parts.push(`chest: ~${Math.round(specs?.chestSpec || realCm.chestCm)}cm`);
+      break;
+  }
+
+  return parts.join(', ');
 }
 
 function matchChartWithProfileOnly(
@@ -532,15 +651,16 @@ function matchChartWithProfileOnly(
   category?: GarmentCategory,
   chartSource?: string,
   sizingSystem?: SizingSystem,
+  specs?: GarmentMetadata | null,
 ): SizeRecommendation {
   const sizes = Object.keys(chart);
   const bmi = computeBMI(profile.heightCm, profile.weightKg);
   const weights = getCategoryWeights(category);
 
-  const shoulderEstCm = profile.heightCm * 0.24 * (bmi < 25 ? 1.0 : bmi < 30 ? 1.05 : 1.10);
-  const chestEstCm = shoulderEstCm * 2.4;
+  const shoulderEstCm = specs?.shoulderSpec || (profile.heightCm * 0.24 * (bmi < 25 ? 1.0 : bmi < 30 ? 1.05 : 1.10));
+  const chestEstCm = specs?.chestSpec || (shoulderEstCm * 2.4);
   const hipEstCm = shoulderEstCm * 2.2;
-  const armLengthCm = profile.heightCm * 0.36;
+  const armLengthCm = specs?.sleeveLength || (profile.heightCm * 0.36);
   const torsoLengthCm = profile.heightCm * 0.30;
 
   const syntheticRealCm = { shoulderCm: shoulderEstCm, chestCm: chestEstCm, hipCm: hipEstCm, armLengthCm, torsoLengthCm };
@@ -550,7 +670,7 @@ function matchChartWithProfileOnly(
 
   for (const size of sizes) {
     const entry = chart[size];
-    const { score } = scoreSize(entry, syntheticRealCm, profile.heightCm, weights, category);
+    const { score } = scoreSize(entry, syntheticRealCm, profile.heightCm, weights, category, specs);
     if (score < bestScore) { bestScore = score; bestSize = size; }
   }
 
@@ -562,16 +682,19 @@ function matchChartWithProfileOnly(
   const { adjusted, fitPrediction } = applyFitBias(bestSize, fitType, chart, category);
   const categoryLabel = category && category !== 'other' ? ` for ${category}` : '';
   const chartLabel = chartSource === 'custom' ? 'product-specific' : 'category-default';
+  const hasSpecs = !!(specs?.garmentLength || specs?.sleeveLength || specs?.shoulderSpec || specs?.chestSpec);
 
   return {
     recommendedSize: adjusted,
-    confidence: Math.round(Math.min(0.70, 0.45 + Math.max(0, 1 - bestScore / 20) * 0.25) * 100) / 100,
+    confidence: Math.round(Math.min(0.70, 0.45 + Math.max(0, 1 - bestScore / 20) * 0.25 + (hasSpecs ? 0.03 : 0)) * 100) / 100,
     fitPrediction,
     alternatives: adjacentSizes(adjusted, chart),
     method: chartSource === 'category-default' ? 'category-default' : 'chart-match',
-    reasoning: `Estimated body dimensions from height (${profile.heightCm}cm) and weight (${profile.weightKg}kg), matched against ${chartLabel} size chart${categoryLabel}. No camera measurements — lower accuracy. [Heuristic: BMI + height-proportional estimation.]`,
+    reasoning: `Estimated body dimensions from height (${profile.heightCm}cm) and weight (${profile.weightKg}kg), matched against ${chartLabel} size chart${categoryLabel}. No camera measurements — lower accuracy. ${categoryMeasurementExplanation(category)} [Heuristic: BMI + height-proportional estimation.]`,
     category,
     sizingSystem,
+    dataSource: describeDataSource(chartSource || 'none'),
+    measurementBasis: describeMeasurementBasis(false, true, category, specs),
   };
 }
 
@@ -582,6 +705,7 @@ function matchChartMeasurementsOnly(
   category?: GarmentCategory,
   chartSource?: string,
   sizingSystem?: SizingSystem,
+  specs?: GarmentMetadata | null,
 ): SizeRecommendation {
   const sizes = Object.keys(chart);
   const weights = getCategoryWeights(category);
@@ -593,7 +717,7 @@ function matchChartMeasurementsOnly(
 
   for (const size of sizes) {
     const entry = chart[size];
-    const { score } = scoreSize(entry, realCm, fallbackHeight, weights, category);
+    const { score } = scoreSize(entry, realCm, fallbackHeight, weights, category, specs);
     if (score < bestScore) { bestScore = score; bestSize = size; }
   }
 
@@ -606,9 +730,11 @@ function matchChartMeasurementsOnly(
     fitPrediction,
     alternatives: adjacentSizes(adjusted, chart),
     method: chartSource === 'category-default' ? 'category-default' : 'chart-match',
-    reasoning: `Matched landmark-based proportions against size chart${categoryLabel}. No height/weight profile provided — using proportional estimates only. [Heuristic: landmark ratios with assumed average height.]`,
+    reasoning: `Matched landmark-based proportions against size chart${categoryLabel}. No height/weight profile provided — using proportional estimates only. ${categoryMeasurementExplanation(category)} [Heuristic: landmark ratios with assumed average height.]`,
     category,
     sizingSystem,
+    dataSource: describeDataSource(chartSource || 'none'),
+    measurementBasis: describeMeasurementBasis(true, false, category, specs),
   };
 }
 
@@ -618,7 +744,12 @@ function estimateFromMeasurements(
   fitType?: FitType,
   category?: GarmentCategory,
   sizingSystem?: SizingSystem,
+  specs?: GarmentMetadata | null,
 ): SizeRecommendation {
+  if (category && DEFAULT_CHARTS[category]) {
+    return matchAgainstChart(DEFAULT_CHARTS[category]!, measurements, profile, fitType, category, 'category-default', sizingSystem, specs);
+  }
+
   const realCm = estimateRealCm(measurements, profile.heightCm);
   const bmi = computeBMI(profile.heightCm, profile.weightKg);
 
@@ -626,10 +757,12 @@ function estimateFromMeasurements(
     ['XS', 38], ['S', 40], ['M', 44], ['L', 46], ['XL', 48], ['XXL', 50], ['XXXL', 53],
   ];
 
+  const effectiveShoulder = specs?.shoulderSpec || realCm.shoulderCm;
+
   let bestSize = 'M';
   let bestDiff = Infinity;
   for (const [size, shoulder] of shoulderSizeMap) {
-    const diff = Math.abs(realCm.shoulderCm - shoulder);
+    const diff = Math.abs(effectiveShoulder - shoulder);
     if (diff < bestDiff) { bestDiff = diff; bestSize = size; }
   }
 
@@ -651,9 +784,11 @@ function estimateFromMeasurements(
     fitPrediction,
     alternatives: adjacentSizes(adjusted, syntheticChart),
     method: 'measurements-only',
-    reasoning: `Estimated shoulder width ~${Math.round(realCm.shoulderCm)}cm from body landmarks, mapped to standard sizes. No garment size chart was provided — using generic sizing table. [Heuristic: shoulder width → size mapping.]`,
+    reasoning: `Estimated shoulder width ~${Math.round(effectiveShoulder)}cm from body landmarks, mapped to standard sizes. No garment size chart was provided — using generic sizing table. ${categoryMeasurementExplanation(category)} [Heuristic: shoulder width → size mapping.]`,
     category,
     sizingSystem,
+    dataSource: 'generic-fallback',
+    measurementBasis: describeMeasurementBasis(true, true, category, specs),
   };
 }
 
@@ -662,12 +797,13 @@ function fallbackFromProfile(
   fitType?: FitType,
   category?: GarmentCategory,
   sizingSystem?: SizingSystem,
+  specs?: GarmentMetadata | null,
 ): SizeRecommendation {
   const bmi = computeBMI(profile.heightCm, profile.weightKg);
 
   if (category && DEFAULT_CHARTS[category]) {
     const chart = DEFAULT_CHARTS[category]!;
-    return matchChartWithProfileOnly(chart, profile, fitType, category, 'category-default', sizingSystem);
+    return matchChartWithProfileOnly(chart, profile, fitType, category, 'category-default', sizingSystem, specs);
   }
 
   const bucket = HW_TABLE.find(b => bmi >= b.minBMI && bmi < b.maxBMI) || HW_TABLE[1];
@@ -710,8 +846,10 @@ function fallbackFromProfile(
     fitPrediction,
     alternatives: adjacentSizes(adjusted, syntheticChart),
     method: 'profile-heuristic',
-    reasoning: `Estimated from height (${profile.heightCm}cm), weight (${profile.weightKg}kg), BMI ~${Math.round(bmi)}.${profile.usualSize ? ` User stated usual size: ${profile.usualSize}.` : ''} No body landmarks or size chart — this is a rough estimate. [Heuristic: BMI-bucket + height-range table.]`,
+    reasoning: `Estimated from height (${profile.heightCm}cm), weight (${profile.weightKg}kg), BMI ~${Math.round(bmi)}.${profile.usualSize ? ` User stated usual size: ${profile.usualSize}.` : ''} No body landmarks or size chart — this is a rough estimate. ${categoryMeasurementExplanation(category)} [Heuristic: BMI-bucket + height-range table.]`,
     category,
     sizingSystem,
+    dataSource: 'generic-fallback',
+    measurementBasis: describeMeasurementBasis(false, true, category, specs),
   };
 }

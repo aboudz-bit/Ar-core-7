@@ -20,6 +20,12 @@ export async function POST(req: NextRequest) {
     const garmentCategory = formData.get('garmentCategory') as string | null;
     const fitType = formData.get('fitType') as string | null;
     const drapeFactorRaw = formData.get('drapeFactor') as string | null;
+    const sizeChartRaw = formData.get('sizeChart') as string | null;
+    const garmentLengthRaw = formData.get('garmentLength') as string | null;
+    const sleeveLengthRaw = formData.get('sleeveLength') as string | null;
+    const shoulderSpecRaw = formData.get('shoulderSpec') as string | null;
+    const chestSpecRaw = formData.get('chestSpec') as string | null;
+    const sizingSystem = formData.get('sizingSystem') as string | null;
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'companyId is required' }, { status: 400 });
@@ -91,9 +97,38 @@ export async function POST(req: NextRequest) {
 
     const validCategories = ['t-shirt', 'shirt', 'jacket', 'hoodie', 'sweater', 'thobe', 'abaya', 'dress', 'polo', 'other'];
     const validFitTypes = ['slim', 'regular', 'oversized', 'loose'];
+    const validSizingSystems = ['letter', 'numeric', 'custom'];
     const parsedDrapeFactor = drapeFactorRaw ? parseFloat(drapeFactorRaw) : undefined;
     const drapeFactor = parsedDrapeFactor && !isNaN(parsedDrapeFactor) && parsedDrapeFactor >= 0.5 && parsedDrapeFactor <= 2.0
       ? parsedDrapeFactor : undefined;
+
+    let sizeChart: Record<string, Record<string, number | undefined>> | undefined;
+    if (sizeChartRaw) {
+      try {
+        const parsed = JSON.parse(sizeChartRaw);
+        if (typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0) {
+          const normalized: Record<string, Record<string, number | undefined>> = {};
+          for (const [sizeLabel, entry] of Object.entries(parsed)) {
+            if (typeof entry === 'object' && entry !== null) {
+              const normEntry: Record<string, number | undefined> = {};
+              for (const [field, val] of Object.entries(entry as Record<string, unknown>)) {
+                const num = typeof val === 'number' ? val : typeof val === 'string' ? parseFloat(val) : NaN;
+                if (!isNaN(num) && num > 0) normEntry[field] = num;
+              }
+              if (Object.keys(normEntry).length > 0) normalized[String(sizeLabel)] = normEntry;
+            }
+          }
+          if (Object.keys(normalized).length > 0) sizeChart = normalized;
+        }
+      } catch {
+      }
+    }
+
+    const parseSpec = (raw: string | null): number | undefined => {
+      if (!raw) return undefined;
+      const val = parseFloat(raw);
+      return !isNaN(val) && val > 0 && val < 500 ? val : undefined;
+    };
 
     const job = await createTryOnJob({
       companyId,
@@ -105,6 +140,12 @@ export async function POST(req: NextRequest) {
       garmentCategory: garmentCategory && validCategories.includes(garmentCategory) ? garmentCategory : undefined,
       fitType: fitType && validFitTypes.includes(fitType) ? fitType : undefined,
       drapeFactor,
+      sizeChart,
+      garmentLength: parseSpec(garmentLengthRaw),
+      sleeveLength: parseSpec(sleeveLengthRaw),
+      shoulderSpec: parseSpec(shoulderSpecRaw),
+      chestSpec: parseSpec(chestSpecRaw),
+      sizingSystem: sizingSystem && validSizingSystems.includes(sizingSystem) ? sizingSystem : undefined,
     });
 
     return NextResponse.json({ success: true, data: { id: job.id, status: job.status } }, { status: 201 });

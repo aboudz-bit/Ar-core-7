@@ -20,6 +20,12 @@ export interface CreateTryOnJobInput {
   garmentCategory?: string;
   fitType?: string;
   drapeFactor?: number;
+  sizeChart?: Record<string, Record<string, number | undefined>>;
+  garmentLength?: number;
+  sleeveLength?: number;
+  shoulderSpec?: number;
+  chestSpec?: number;
+  sizingSystem?: string;
 }
 
 export interface TryOnJobResult {
@@ -39,13 +45,19 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
       garmentImagePath: input.garmentImagePath,
       provider: input.provider || 'internal',
       status: 'UPLOADED',
-      metadata: (input.bodyLandmarks || input.bodyProfile || input.garmentCategory || input.fitType || input.drapeFactor !== undefined)
+      metadata: (input.bodyLandmarks || input.bodyProfile || input.garmentCategory || input.fitType || input.drapeFactor !== undefined || input.sizeChart || input.garmentLength || input.sleeveLength || input.shoulderSpec || input.chestSpec || input.sizingSystem)
         ? JSON.parse(JSON.stringify({
             ...(input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : {}),
             ...(input.bodyProfile ? { bodyProfile: input.bodyProfile } : {}),
             ...(input.garmentCategory ? { garmentCategory: input.garmentCategory } : {}),
             ...(input.fitType ? { fitType: input.fitType } : {}),
             ...(input.drapeFactor !== undefined ? { drapeFactor: input.drapeFactor } : {}),
+            ...(input.sizeChart ? { sizeChart: input.sizeChart } : {}),
+            ...(input.garmentLength ? { garmentLength: input.garmentLength } : {}),
+            ...(input.sleeveLength ? { sleeveLength: input.sleeveLength } : {}),
+            ...(input.shoulderSpec ? { shoulderSpec: input.shoulderSpec } : {}),
+            ...(input.chestSpec ? { chestSpec: input.chestSpec } : {}),
+            ...(input.sizingSystem ? { sizingSystem: input.sizingSystem } : {}),
           }))
         : undefined,
     },
@@ -296,6 +308,18 @@ async function processTryOnJob(jobId: string) {
       ? (rawFitType as import('@/services/size-recommendation/size-engine').FitType)
       : undefined;
 
+    const validSizingSystems = ['letter', 'numeric', 'custom'] as const;
+    const rawSizingSystem = (meta?.sizingSystem as string) || undefined;
+    const storedSizingSystem = rawSizingSystem && (validSizingSystems as readonly string[]).includes(rawSizingSystem)
+      ? (rawSizingSystem as import('@/services/size-recommendation/size-engine').SizingSystem)
+      : undefined;
+
+    const storedSizeChart = meta?.sizeChart as Record<string, Record<string, number | undefined>> | undefined;
+    const storedGarmentLength = typeof meta?.garmentLength === 'number' ? meta.garmentLength : undefined;
+    const storedSleeveLength = typeof meta?.sleeveLength === 'number' ? meta.sleeveLength : undefined;
+    const storedShoulderSpec = typeof meta?.shoulderSpec === 'number' ? meta.shoulderSpec : undefined;
+    const storedChestSpec = typeof meta?.chestSpec === 'number' ? meta.chestSpec : undefined;
+
     let sizeRecommendation: SizeRecommendation | null = null;
     try {
       sizeRecommendation = recommendSize({
@@ -303,8 +327,17 @@ async function processTryOnJob(jobId: string) {
         userProfile: storedProfile
           ? { heightCm: storedProfile.heightCm, weightKg: storedProfile.weightKg, usualSize: storedProfile.usualSize }
           : undefined,
-        garmentMetadata: (storedCategory || storedFitType)
-          ? { category: storedCategory, fitType: storedFitType }
+        garmentMetadata: (storedCategory || storedFitType || storedSizeChart || storedSizingSystem || storedGarmentLength || storedSleeveLength || storedShoulderSpec || storedChestSpec)
+          ? {
+              category: storedCategory,
+              fitType: storedFitType,
+              sizeChart: storedSizeChart,
+              sizingSystem: storedSizingSystem,
+              garmentLength: storedGarmentLength,
+              sleeveLength: storedSleeveLength,
+              shoulderSpec: storedShoulderSpec,
+              chestSpec: storedChestSpec,
+            }
           : undefined,
       });
     } catch (sizeErr) {

@@ -82,12 +82,15 @@ prisma/
 
 ## Size Recommendation Engine
 - Service: `src/services/size-recommendation/size-engine.ts`
-- Category-specific default size charts: thobe (52–64 numeric), abaya (50–60 numeric), t-shirt/shirt/polo (XS–XXXL letter), jacket/hoodie/sweater (XS–XXXL letter)
-- Category-aware scoring weights (thobe prioritizes height/length, abaya prioritizes drape length)
+- Category-specific default size charts: thobe (52–64 numeric), abaya (50–60 numeric or S–XXL letter), t-shirt/shirt/polo (XS–XXXL letter), jacket/hoodie/sweater (XS–XXXL letter)
+- Category-aware scoring weights (thobe prioritizes height/length/sleeve, abaya prioritizes drape length/shoulder, t-shirt/jacket prioritizes shoulder/chest)
 - Fit types: slim, regular, loose, oversized
 - Sizing systems: letter, numeric, custom
-- Full pipeline: API route parses garmentCategory + fitType → createTryOnJob stores in metadata → processTryOnJob reads and passes to recommendSize()
-- VirtualFitClient has category/fit type dropdowns + drapeFactor slider with contextual sizing hints
+- Extended GarmentMetadata: category, fitType, sizingSystem, sizeChart (product-level), garmentLength, sleeveLength, shoulderSpec, chestSpec
+- Product-level specs override body estimation when provided (e.g. shoulderSpec replaces estimated shoulder width)
+- SizeRecommendation response includes: dataSource (product-specific | category-default | generic-fallback), measurementBasis (what data was used)
+- Full pipeline: API route parses garmentCategory + fitType + sizeChart (JSON) + garmentLength/sleeveLength/shoulderSpec/chestSpec → createTryOnJob stores in metadata → processTryOnJob reads and passes to recommendSize()
+- VirtualFitClient has category/fit type dropdowns + drapeFactor slider with contextual sizing hints; size display formats correctly for numeric vs letter systems
 
 ## API Metadata Response
 The GET response for a completed job includes:

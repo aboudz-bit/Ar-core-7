@@ -112,6 +112,10 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     fitPrediction: string;
     alternatives: string[];
     reasoning: string;
+    category?: string;
+    sizingSystem?: string;
+    dataSource?: string;
+    measurementBasis?: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [heightCm, setHeightCm] = useState<string>('');
@@ -566,13 +570,15 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               <div className="mt-6 mx-auto max-w-sm bg-surface-50 rounded-lg border border-surface-200 p-4 text-left">
                 <h4 className="text-sm font-semibold text-surface-800 mb-2 flex items-center gap-2">
                   <Ruler className="w-4 h-4" /> Size Recommendation
-                  {garmentCategory && garmentCategory !== 'other' && (
-                    <span className="text-xs font-normal text-surface-400 capitalize">({garmentCategory})</span>
+                  {sizeRec.category && sizeRec.category !== 'other' && (
+                    <span data-testid="text-size-category" className="text-xs font-normal text-surface-400 capitalize">({sizeRec.category})</span>
                   )}
                 </h4>
                 <div className="flex items-baseline gap-3 mb-2">
                   <span data-testid="text-recommended-size" className="text-2xl font-bold" style={{ color: company.brandPrimary }}>
-                    {sizeRec.recommendedSize}
+                    {sizeRec.sizingSystem === 'numeric'
+                      ? `Size ${sizeRec.recommendedSize}`
+                      : sizeRec.recommendedSize}
                   </span>
                   <span data-testid="text-size-confidence" className="text-xs text-surface-500">
                     Confidence: {Math.round(sizeRec.confidence * 100)}%
@@ -583,7 +589,15 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
                 </div>
                 {sizeRec.alternatives.length > 0 && (
                   <p data-testid="text-alternatives" className="text-xs text-surface-500 mb-1">
-                    Also consider: {sizeRec.alternatives.join(', ')}
+                    Also consider: {sizeRec.alternatives.map(a =>
+                      sizeRec.sizingSystem === 'numeric' ? `Size ${a}` : a
+                    ).join(', ')}
+                  </p>
+                )}
+                {sizeRec.dataSource && (
+                  <p data-testid="text-data-source" className="text-[11px] text-surface-400 mb-1">
+                    Data: {sizeRec.dataSource === 'product-specific' ? 'Product-specific size chart' : sizeRec.dataSource === 'category-default' ? `Default ${sizeRec.category || ''} sizing chart` : 'Generic size estimation'}
+                    {sizeRec.measurementBasis ? ` · Based on: ${sizeRec.measurementBasis}` : ''}
                   </p>
                 )}
                 <p data-testid="text-reasoning" className="text-[11px] text-surface-400">{sizeRec.reasoning}</p>
