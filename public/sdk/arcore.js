@@ -323,6 +323,83 @@
 
       this._renderImageCard(overlay, data);
     },
+
+    /**
+     * Launch a face/body try-on experience by experience slug.
+     * @param {string|Object} options — slug string or { slug, target? }
+     *   target: CSS selector or DOM element to embed the try-on iframe into.
+     *           If omitted, opens as fullscreen overlay.
+     */
+    launchTryOn: function (options) {
+      var self = this;
+      var slug = (typeof options === 'string') ? options : options.slug;
+      var target = (typeof options === 'object' && options.target) || null;
+      var base = this._baseUrl || window.location.origin;
+      var apiUrl = base + '/api/public/tryon/' + encodeURIComponent(slug);
+
+      // If target element specified, open in iframe inside that element
+      if (target) {
+        var container = typeof target === 'string' ? document.querySelector(target) : target;
+        if (!container) {
+          console.error('ARCore: target element not found:', target);
+          return;
+        }
+        var iframe = document.createElement('iframe');
+        iframe.src = base + '/tryon/' + encodeURIComponent(slug);
+        iframe.style.cssText = 'width:100%;height:100%;border:0;';
+        iframe.setAttribute('allow', 'camera; microphone');
+        iframe.setAttribute('allowfullscreen', '');
+        container.innerHTML = '';
+        container.appendChild(iframe);
+        return;
+      }
+
+      // Otherwise open as fullscreen overlay
+      var overlay = this._createOverlay();
+      overlay.innerHTML = this._loadingHTML();
+      document.body.appendChild(overlay);
+      this._ensureStyles();
+
+      fetch(apiUrl)
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data.success) {
+            self._showError(overlay, 'Try-on not available', data.error || 'Experience not found.');
+            return;
+          }
+
+          overlay.innerHTML = '';
+          overlay.style.background = '#000';
+
+          var closeBtn = self._addCloseBtn(overlay);
+
+          var badge = document.createElement('div');
+          badge.className = 'arcore-mode-badge';
+          badge.style.cssText += 'background:rgba(168,85,247,0.2);color:#c4b5fd;border:1px solid rgba(168,85,247,0.3);';
+          badge.textContent = data.data.type === 'FACE_TRYON' ? 'Face Try-On' : 'Body Try-On';
+          overlay.appendChild(badge);
+
+          // Embed the try-on page in an iframe within the overlay
+          var tryonIframe = document.createElement('iframe');
+          tryonIframe.src = data.data.urls.tryon;
+          tryonIframe.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:1;';
+          tryonIframe.setAttribute('allow', 'camera; microphone');
+          tryonIframe.setAttribute('allowfullscreen', '');
+          overlay.appendChild(tryonIframe);
+
+          // Re-append close button above iframe
+          closeBtn.style.zIndex = '100002';
+
+          self._addInfoBar(overlay, {
+            name: data.data.product ? data.data.product.title : data.data.name,
+            company: data.data.company ? data.data.company.name : '',
+          });
+        })
+        .catch(function (err) {
+          console.error('ARCore SDK try-on error:', err);
+          self._showError(overlay, 'Failed to load try-on', err.message);
+        });
+    },
   };
 
   ARCore.init({});

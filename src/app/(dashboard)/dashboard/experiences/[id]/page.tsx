@@ -45,6 +45,8 @@ const EXPERIENCE_TYPE_NEEDS: Record<string, string[]> = {
   IMAGE_TARGET: ['MODEL_GLB', 'TARGET_IMAGE'],
   QR_LAUNCH: ['MODEL_GLB'],
   EMBED_VIEWER: ['MODEL_GLB'],
+  FACE_TRYON: ['FACE_OVERLAY_IMAGE'],
+  BODY_TRYON: ['BODY_OVERLAY_MODEL'],
 };
 
 export default function ExperienceDetailPage() {

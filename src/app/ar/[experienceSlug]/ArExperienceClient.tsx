@@ -299,6 +299,18 @@ export function ArExperienceClient({ experience, product, company, branding }: P
     );
   }
 
+  // Redirect try-on experiences to the dedicated try-on route
+  if (experience.type === 'FACE_TRYON' || experience.type === 'BODY_TRYON') {
+    if (typeof window !== 'undefined') {
+      window.location.href = `/tryon/${experience.slug}`;
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <p className="text-surface-500">Redirecting to try-on experience...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <p className="text-surface-500">Unknown experience type</p>

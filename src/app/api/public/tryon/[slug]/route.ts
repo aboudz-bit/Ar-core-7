@@ -13,7 +13,9 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
           id: true,
           title: true,
           description: true,
-          assets: { select: { assetType: true, filePath: true } },
+          category: true,
+          thumbnailUrl: true,
+          assets: { select: { id: true, assetType: true, filePath: true, fileName: true, metadata: true } },
         },
       },
     },
@@ -23,10 +25,26 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ success: false, error: 'Not found or not published' }, { status: 404 });
   }
 
+  if (experience.experienceType !== 'FACE_TRYON' && experience.experienceType !== 'BODY_TRYON') {
+    return NextResponse.json({ success: false, error: 'Not a try-on experience' }, { status: 400 });
+  }
+
+  // Filter overlay assets based on experience type
+  const overlayTypes = experience.experienceType === 'FACE_TRYON'
+    ? ['FACE_OVERLAY_MODEL', 'FACE_OVERLAY_IMAGE', 'FACE_EFFECT']
+    : ['BODY_OVERLAY_MODEL', 'BODY_REFERENCE_IMAGE'];
+
+  const overlays = (experience.product?.assets || [])
+    .filter((a) => overlayTypes.includes(a.assetType))
+    .map((a) => ({
+      id: a.id,
+      assetType: a.assetType,
+      filePath: a.filePath,
+      fileName: a.fileName,
+      metadata: a.metadata,
+    }));
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const glbAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_GLB');
-  const usdzAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_USDZ');
-  const posterAsset = experience.product?.assets.find((a) => a.assetType === 'POSTER');
 
   return NextResponse.json({
     success: true,
@@ -40,23 +58,13 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
         id: experience.product.id,
         title: experience.product.title,
         description: experience.product.description,
+        category: experience.product.category,
+        thumbnailUrl: experience.product.thumbnailUrl,
       } : null,
-      assets: {
-        modelUrl: glbAsset ? glbAsset.filePath : null,
-        usdzUrl: usdzAsset ? usdzAsset.filePath : null,
-        posterUrl: posterAsset ? posterAsset.filePath : null,
-      },
+      overlays,
       urls: {
-        viewer: `${appUrl}/ar/${experience.slug}`,
+        tryon: `${appUrl}/tryon/${experience.slug}`,
         embed: `${appUrl}/embed/${experience.slug}`,
-        launch: `${appUrl}/launch/${experience.slug}`,
-        qr: `${appUrl}/qr/${experience.slug}`,
-        ...(experience.experienceType === 'FACE_TRYON' || experience.experienceType === 'BODY_TRYON'
-          ? { tryon: `${appUrl}/tryon/${experience.slug}` }
-          : {}),
-      },
-      embed: {
-        iframe: `<iframe src="${appUrl}/embed/${experience.slug}" style="width:100%;height:600px;border:0;" allow="camera; xr-spatial-tracking" allowfullscreen></iframe>`,
       },
     },
   });

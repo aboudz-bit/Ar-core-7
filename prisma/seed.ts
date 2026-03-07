@@ -1047,6 +1047,179 @@ async function main() {
   console.log('  Tomahawk Steak (IMAGE_ONLY) — ready for pipeline');
   console.log('  Black Abaya (IMAGE_ONLY) — ready for pipeline');
 
+  // ============================================================
+  // Face Try-On Module — Eyewear test products
+  // ============================================================
+  console.log('Creating Face Try-On test products...');
+
+  const eyewearBrand = await prisma.company.create({
+    data: {
+      name: 'Optica Eyewear',
+      slug: 'optica-eyewear',
+      brandPrimary: '#7c3aed',
+      brandSecondary: '#a78bfa',
+      domain: 'optica-eyewear.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: eyewearBrand.id, role: 'SUPER_ADMIN' },
+  });
+
+  // Aviator Sunglasses — FACE_TRYON
+  const aviatorGlasses = await prisma.product.create({
+    data: {
+      companyId: eyewearBrand.id,
+      title: 'Aviator Sunglasses Classic',
+      sku: 'OPT-AVT-001',
+      category: 'Eyewear',
+      description: 'Classic aviator sunglasses with polarized lenses and gold-tone metal frame. UV400 protection.',
+      brand: 'Optica',
+      status: 'ACTIVE',
+      tags: ['sunglasses', 'aviator', 'polarized', 'classic'],
+      scalePreset: 1.0,
+      anchorType: 'face',
+      assetCompletenessScore: 80,
+    },
+  });
+
+  const aviatorOverlayPath = createPlaceholderImage(eyewearBrand.id, aviatorGlasses.id, 'aviator-overlay.png');
+  const aviatorThumbnailPath = createPlaceholderImage(eyewearBrand.id, aviatorGlasses.id, 'aviator-thumbnail.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: aviatorGlasses.id,
+        assetType: 'FACE_OVERLAY_IMAGE',
+        fileName: 'aviator-overlay.png',
+        filePath: aviatorOverlayPath,
+        fileSize: 45000,
+        mimeType: 'image/png',
+        metadata: { placement: 'GLASSES', offsetY: 0 },
+      },
+      {
+        productId: aviatorGlasses.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'aviator-thumbnail.png',
+        filePath: aviatorThumbnailPath,
+        fileSize: 30000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  await prisma.product.update({
+    where: { id: aviatorGlasses.id },
+    data: { thumbnailUrl: aviatorThumbnailPath },
+  });
+
+  // Cat-Eye Frames — FACE_TRYON
+  const catEyeFrames = await prisma.product.create({
+    data: {
+      companyId: eyewearBrand.id,
+      title: 'Cat Eye Fashion Frames',
+      sku: 'OPT-CAT-001',
+      category: 'Eyewear',
+      description: 'Retro cat-eye frames with acetate construction. Available with prescription or clear lenses.',
+      brand: 'Optica',
+      status: 'ACTIVE',
+      tags: ['glasses', 'cat-eye', 'retro', 'fashion'],
+      scalePreset: 1.0,
+      anchorType: 'face',
+      assetCompletenessScore: 80,
+    },
+  });
+
+  const catEyeOverlayPath = createPlaceholderImage(eyewearBrand.id, catEyeFrames.id, 'cateye-overlay.png');
+  const catEyeThumbnailPath = createPlaceholderImage(eyewearBrand.id, catEyeFrames.id, 'cateye-thumbnail.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: catEyeFrames.id,
+        assetType: 'FACE_OVERLAY_IMAGE',
+        fileName: 'cateye-overlay.png',
+        filePath: catEyeOverlayPath,
+        fileSize: 42000,
+        mimeType: 'image/png',
+        metadata: { placement: 'GLASSES', offsetY: 0 },
+      },
+      {
+        productId: catEyeFrames.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'cateye-thumbnail.png',
+        filePath: catEyeThumbnailPath,
+        fileSize: 28000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  await prisma.product.update({
+    where: { id: catEyeFrames.id },
+    data: { thumbnailUrl: catEyeThumbnailPath },
+  });
+
+  // Create FACE_TRYON experiences
+  const aviatorTryOn = await prisma.experience.create({
+    data: {
+      companyId: eyewearBrand.id,
+      productId: aviatorGlasses.id,
+      name: 'Aviator Virtual Try-On',
+      slug: 'optica-aviator-tryon',
+      experienceType: 'FACE_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'transparent',
+      ctaText: 'Buy Now',
+      ctaLink: 'https://optica-eyewear.com/aviator',
+      sceneConfig: { placementMode: 'GLASSES' },
+      analyticsEnabled: true,
+    },
+  });
+
+  const catEyeTryOn = await prisma.experience.create({
+    data: {
+      companyId: eyewearBrand.id,
+      productId: catEyeFrames.id,
+      name: 'Cat Eye Virtual Try-On',
+      slug: 'optica-cateye-tryon',
+      experienceType: 'FACE_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'transparent',
+      ctaText: 'Buy Now',
+      ctaLink: 'https://optica-eyewear.com/cateye',
+      sceneConfig: { placementMode: 'GLASSES' },
+      analyticsEnabled: true,
+    },
+  });
+
+  await prisma.publishRecord.createMany({
+    data: [
+      {
+        experienceId: aviatorTryOn.id,
+        companyId: eyewearBrand.id,
+        publishStatus: 'PUBLISHED',
+        publicUrl: 'http://localhost:3000/tryon/optica-aviator-tryon',
+        publishedAt: new Date(),
+        publishedBy: superAdmin.id,
+      },
+      {
+        experienceId: catEyeTryOn.id,
+        companyId: eyewearBrand.id,
+        publishStatus: 'PUBLISHED',
+        publicUrl: 'http://localhost:3000/tryon/optica-cateye-tryon',
+        publishedAt: new Date(),
+        publishedBy: superAdmin.id,
+      },
+    ],
+  });
+
+  console.log('Face Try-On test products created!');
+  console.log('  Aviator Sunglasses (FACE_TRYON) — /tryon/optica-aviator-tryon');
+  console.log('  Cat Eye Frames (FACE_TRYON) — /tryon/optica-cateye-tryon');
+
   console.log('Seed complete!');
   console.log('');
   console.log('Demo credentials:');
@@ -1060,10 +1233,10 @@ async function main() {
   console.log('  Chronograph Watch Elite (Luxe Brands) — GLB + Thumbnail = 50%');
   console.log('  Wireless ANC Headphones (TechGear Pro) — GLB = 30%');
   console.log('');
-  console.log(`Companies: ${3}`);
-  console.log(`Products: ${7}`);
-  console.log(`Experiences: ${6}`);
-  console.log(`Product Assets: ${9}`);
+  console.log('Try-On experiences:');
+  console.log('  Aviator Virtual Try-On — /tryon/optica-aviator-tryon');
+  console.log('  Cat Eye Virtual Try-On — /tryon/optica-cateye-tryon');
+  console.log('');
   console.log(`Analytics events: ${analyticsData.length}`);
 }
 
