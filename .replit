@@ -52,3 +52,6 @@ MAX_UPLOAD_SIZE_MB = "50"
 STORAGE_PROVIDER = "local"
 ANALYTICS_ENABLED = "true"
 WEBHOOK_SIGNING_SECRET = "whsec_k8m3nf92x7p1q4w5"
+
+[agent]
+integrations = ["github:1.0.0"]
