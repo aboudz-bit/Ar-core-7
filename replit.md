@@ -56,14 +56,23 @@ prisma/
 - Face overlay asset: `public/demo-assets/aviator-glasses.png` (seeded as FACE_OVERLAY_IMAGE)
 
 ## Virtual Fit API
-- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage + optional bodyLandmarks JSON (multipart)
-- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath + metadata (clothWarp, occlusionMask, etc.)
+- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage + optional bodyLandmarks JSON + garmentCategory + fitType (multipart)
+- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath + metadata (clothWarp, occlusionMask, sizeRecommendation, etc.)
 - Auth API: `POST /api/tryon-jobs` — same but requires session auth
 - Client: VirtualFitClient detects body pose from uploaded photo via MediaPipe Pose (CDN), sends 33 landmarks as JSON
-- Processing pipeline: landmarks → computeBodyMeasurements() → warpGarment() (12-strip cloth deformation) + generateOcclusionMask() (head/arms layering) + recommendSize()
+- Processing pipeline: landmarks → computeBodyMeasurements() → warpGarment() (12-strip cloth deformation) + generateOcclusionMask() (head/arms layering) + recommendSize(category, fitType)
 - Fallback (no landmarks): flat sharp.resize() with proportional placement
 - Output: `/public/uploads/tryon-output/tryon_{jobId}_{timestamp}.png`
 - Service: `src/services/virtual-tryon/clothing-tryon.ts`
+
+## Size Recommendation Engine
+- Service: `src/services/size-recommendation/size-engine.ts`
+- Category-specific default size charts: thobe (52–64 numeric), abaya (50–60 numeric), t-shirt/shirt/polo (XS–XXXL letter), jacket/hoodie/sweater (XS–XXXL letter)
+- Category-aware scoring weights (e.g., thobe prioritizes height/length, abaya prioritizes drape length)
+- Fit types: slim, regular, loose, oversized
+- Sizing systems: letter, numeric, custom
+- Full pipeline: API route parses garmentCategory + fitType → createTryOnJob stores in metadata → processTryOnJob reads and passes to recommendSize()
+- VirtualFitClient has category and fit type dropdowns with contextual sizing hints
 
 ## Database
 - PostgreSQL via Replit's built-in database

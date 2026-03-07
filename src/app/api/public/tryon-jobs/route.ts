@@ -17,6 +17,8 @@ export async function POST(req: NextRequest) {
     const weightKgRaw = formData.get('weightKg') as string | null;
     const usualSize = formData.get('usualSize') as string | null;
     const bodyLandmarksRaw = formData.get('bodyLandmarks') as string | null;
+    const garmentCategory = formData.get('garmentCategory') as string | null;
+    const fitType = formData.get('fitType') as string | null;
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'companyId is required' }, { status: 400 });
@@ -86,6 +88,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    const validCategories = ['t-shirt', 'shirt', 'jacket', 'hoodie', 'sweater', 'thobe', 'abaya', 'dress', 'polo', 'other'];
+    const validFitTypes = ['slim', 'regular', 'oversized', 'loose'];
+
     const job = await createTryOnJob({
       companyId,
       experienceId: experienceId || undefined,
@@ -93,6 +98,8 @@ export async function POST(req: NextRequest) {
       garmentImagePath: resolvedGarmentPath,
       bodyProfile,
       bodyLandmarks,
+      garmentCategory: garmentCategory && validCategories.includes(garmentCategory) ? garmentCategory : undefined,
+      fitType: fitType && validFitTypes.includes(fitType) ? fitType : undefined,
     });
 
     return NextResponse.json({ success: true, data: { id: job.id, status: job.status } }, { status: 201 });

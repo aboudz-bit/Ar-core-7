@@ -117,6 +117,8 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [heightCm, setHeightCm] = useState<string>('');
   const [weightKg, setWeightKg] = useState<string>('');
   const [usualSize, setUsualSize] = useState<string>('');
+  const [garmentCategory, setGarmentCategory] = useState<string>('t-shirt');
+  const [fitType, setFitType] = useState<string>('regular');
   const [detectedLandmarks, setDetectedLandmarks] = useState<PoseLandmark[] | null>(null);
   const [detectingPose, setDetectingPose] = useState(false);
 
@@ -223,6 +225,8 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       if (detectedLandmarks) {
         formData.append('bodyLandmarks', JSON.stringify(detectedLandmarks));
       }
+      if (garmentCategory) formData.append('garmentCategory', garmentCategory);
+      if (fitType) formData.append('fitType', fitType);
 
       const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
@@ -243,7 +247,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       setError('Network error. Please try again.');
       setStatus('FAILED');
     }
-  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, pollJobStatus]);
+  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, garmentCategory, fitType, pollJobStatus]);
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -260,6 +264,8 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     setHeightCm('');
     setWeightKg('');
     setUsualSize('');
+    setGarmentCategory('t-shirt');
+    setFitType('regular');
     setDetectedLandmarks(null);
     setDetectingPose(false);
   }, [garmentOverlays]);
@@ -381,6 +387,59 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
           </div>
         </div>
 
+        {/* Garment type & fit */}
+        <div className="bg-white rounded-xl border border-surface-200 p-5 mb-6">
+          <h3 className="text-sm font-semibold text-surface-700 mb-3 flex items-center gap-2">
+            <Shirt className="w-4 h-4" /> Garment Type
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="garmentCategory" className="block text-xs font-medium text-surface-600 mb-1">Category</label>
+              <select
+                id="garmentCategory"
+                data-testid="select-garment-category"
+                value={garmentCategory}
+                onChange={(e) => setGarmentCategory(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm text-surface-800 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              >
+                <option value="t-shirt">T-Shirt</option>
+                <option value="shirt">Shirt</option>
+                <option value="jacket">Jacket</option>
+                <option value="hoodie">Hoodie</option>
+                <option value="sweater">Sweater</option>
+                <option value="polo">Polo</option>
+                <option value="thobe">Thobe</option>
+                <option value="abaya">Abaya</option>
+                <option value="dress">Dress</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="fitType" className="block text-xs font-medium text-surface-600 mb-1">Fit Type</label>
+              <select
+                id="fitType"
+                data-testid="select-fit-type"
+                value={fitType}
+                onChange={(e) => setFitType(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm text-surface-800 bg-white focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              >
+                <option value="slim">Slim Fit</option>
+                <option value="regular">Regular Fit</option>
+                <option value="loose">Loose Fit</option>
+                <option value="oversized">Oversized</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-[11px] text-surface-400 mt-2">
+            {garmentCategory === 'thobe' && 'Thobe sizing uses numeric system (52–64) based on height, shoulder width, and sleeve length.'}
+            {garmentCategory === 'abaya' && 'Abaya sizing uses numeric system (50–60) prioritizing overall length and shoulder width for drape fit.'}
+            {(garmentCategory === 't-shirt' || garmentCategory === 'shirt' || garmentCategory === 'polo') && 'Standard letter sizing (XS–XXXL) based on shoulder width and chest measurements.'}
+            {(garmentCategory === 'jacket' || garmentCategory === 'hoodie' || garmentCategory === 'sweater') && 'Outerwear sizing (XS–XXXL) with wider chest allowance and full sleeve length.'}
+            {garmentCategory === 'dress' && 'Standard letter sizing. Height and shoulder width are primary factors.'}
+            {garmentCategory === 'other' && 'Generic sizing — results may be less accurate without category-specific rules.'}
+          </p>
+        </div>
+
         {/* Body profile inputs */}
         <div className="bg-white rounded-xl border border-surface-200 p-5 mb-8">
           <h3 className="text-sm font-semibold text-surface-700 mb-1 flex items-center gap-2">
@@ -394,6 +453,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               <label htmlFor="heightCm" className="block text-xs font-medium text-surface-600 mb-1">Height (cm)</label>
               <input
                 id="heightCm"
+                data-testid="input-height"
                 type="number"
                 min="50"
                 max="300"
@@ -408,6 +468,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               <label htmlFor="weightKg" className="block text-xs font-medium text-surface-600 mb-1">Weight (kg)</label>
               <input
                 id="weightKg"
+                data-testid="input-weight"
                 type="number"
                 min="20"
                 max="500"
@@ -422,6 +483,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               <label htmlFor="usualSize" className="block text-xs font-medium text-surface-600 mb-1">Usual Size</label>
               <input
                 id="usualSize"
+                data-testid="input-usual-size"
                 type="text"
                 placeholder="e.g. M, L, 42"
                 value={usualSize}
@@ -476,29 +538,31 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               alt="Virtual try-on result"
               className="max-w-lg mx-auto rounded-lg shadow-lg"
             />
-            {/* Size Recommendation */}
             {sizeRec && (
               <div className="mt-6 mx-auto max-w-sm bg-surface-50 rounded-lg border border-surface-200 p-4 text-left">
                 <h4 className="text-sm font-semibold text-surface-800 mb-2 flex items-center gap-2">
                   <Ruler className="w-4 h-4" /> Size Recommendation
+                  {garmentCategory && garmentCategory !== 'other' && (
+                    <span className="text-xs font-normal text-surface-400 capitalize">({garmentCategory})</span>
+                  )}
                 </h4>
                 <div className="flex items-baseline gap-3 mb-2">
-                  <span className="text-2xl font-bold" style={{ color: company.brandPrimary }}>
+                  <span data-testid="text-recommended-size" className="text-2xl font-bold" style={{ color: company.brandPrimary }}>
                     {sizeRec.recommendedSize}
                   </span>
-                  <span className="text-xs text-surface-500">
+                  <span data-testid="text-size-confidence" className="text-xs text-surface-500">
                     Confidence: {Math.round(sizeRec.confidence * 100)}%
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-surface-200 text-surface-600 capitalize">
+                  <span data-testid="text-fit-prediction" className="text-xs px-2 py-0.5 rounded-full bg-surface-200 text-surface-600 capitalize">
                     {sizeRec.fitPrediction} fit
                   </span>
                 </div>
                 {sizeRec.alternatives.length > 0 && (
-                  <p className="text-xs text-surface-500 mb-1">
+                  <p data-testid="text-alternatives" className="text-xs text-surface-500 mb-1">
                     Also consider: {sizeRec.alternatives.join(', ')}
                   </p>
                 )}
-                <p className="text-[11px] text-surface-400">{sizeRec.reasoning}</p>
+                <p data-testid="text-reasoning" className="text-[11px] text-surface-400">{sizeRec.reasoning}</p>
               </div>
             )}
             <p className="text-xs text-surface-400 mt-4">

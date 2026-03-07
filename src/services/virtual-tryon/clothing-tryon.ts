@@ -28,6 +28,10 @@ export interface CreateTryOnJobInput {
   bodyLandmarks?: Array<{ x: number; y: number; z: number; visibility: number }>;
   /** Optional user-provided body profile for enhanced fitting */
   bodyProfile?: BodyProfile;
+  /** Optional garment category for category-specific sizing */
+  garmentCategory?: string;
+  /** Optional fit type */
+  fitType?: string;
 }
 
 export interface TryOnJobResult {
@@ -47,10 +51,12 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
       garmentImagePath: input.garmentImagePath,
       provider: input.provider || 'internal',
       status: 'UPLOADED',
-      metadata: (input.bodyLandmarks || input.bodyProfile)
+      metadata: (input.bodyLandmarks || input.bodyProfile || input.garmentCategory || input.fitType)
         ? JSON.parse(JSON.stringify({
             ...(input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : {}),
             ...(input.bodyProfile ? { bodyProfile: input.bodyProfile } : {}),
+            ...(input.garmentCategory ? { garmentCategory: input.garmentCategory } : {}),
+            ...(input.fitType ? { fitType: input.fitType } : {}),
           }))
         : undefined,
     },
@@ -280,8 +286,17 @@ async function processTryOnJob(jobId: string) {
 
     const processingTime = Date.now() - startTime;
 
-    // --- SIZE RECOMMENDATION ---
-    // Generate a size recommendation if we have any useful data
+    const validCategories = ['t-shirt', 'shirt', 'jacket', 'hoodie', 'sweater', 'thobe', 'abaya', 'dress', 'polo', 'other'] as const;
+    const validFitTypes = ['slim', 'regular', 'oversized', 'loose'] as const;
+    const rawCategory = (meta?.garmentCategory as string) || undefined;
+    const rawFitType = (meta?.fitType as string) || undefined;
+    const storedCategory = rawCategory && (validCategories as readonly string[]).includes(rawCategory)
+      ? (rawCategory as import('@/services/size-recommendation/size-engine').GarmentCategory)
+      : undefined;
+    const storedFitType = rawFitType && (validFitTypes as readonly string[]).includes(rawFitType)
+      ? (rawFitType as import('@/services/size-recommendation/size-engine').FitType)
+      : undefined;
+
     let sizeRecommendation: SizeRecommendation | null = null;
     try {
       sizeRecommendation = recommendSize({
@@ -289,7 +304,9 @@ async function processTryOnJob(jobId: string) {
         userProfile: storedProfile
           ? { heightCm: storedProfile.heightCm, weightKg: storedProfile.weightKg, usualSize: storedProfile.usualSize }
           : undefined,
-        garmentMetadata: undefined, // No garment size chart yet — uses fallback strategies
+        garmentMetadata: (storedCategory || storedFitType)
+          ? { category: storedCategory, fitType: storedFitType }
+          : undefined,
       });
     } catch (sizeErr) {
       console.warn(`[TryOnJob ${jobId}] Size recommendation failed:`, sizeErr);

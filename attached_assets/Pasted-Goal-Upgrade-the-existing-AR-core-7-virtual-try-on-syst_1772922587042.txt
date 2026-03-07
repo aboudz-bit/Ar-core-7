@@ -1,0 +1,150 @@
+Goal:
+Upgrade the existing AR-core-7 virtual try-on system by integrating proven open-source components from GitHub for body segmentation and improved garment realism, while preserving the current pipeline architecture.
+
+Current system (must remain intact):
+- MediaPipe Pose body tracking (33 landmarks)
+- computeBodyMeasurements() from landmarks
+- cloth warping (warpGarment using 12-strip geometric deformation)
+- occlusion masking for head/neck/arms
+- size recommendation engine
+- route: /virtual-fit/noor-virtual-fit-demo
+
+Important rule:
+Do NOT replace the architecture. Only enhance the existing pipeline.
+
+---------------------------------------------------------------------
+
+STEP 1 — Add pixel-level body segmentation (BodyPix)
+
+Integrate TensorFlow BodyPix for better occlusion and garment blending.
+
+Reference implementation:
+https://github.com/tensorflow/tfjs-models/tree/master/body-pix
+
+Requirements:
+
+1. Add a segmentation module:
+   src/services/segmentation/body-segmentation.ts
+
+2. Load BodyPix using TensorFlow.js.
+
+3. For the uploaded person image:
+   - generate a pixel mask of the person’s body
+   - separate:
+     torso
+     arms
+     head
+
+4. Replace the current landmark polygon occlusion mask with a segmentation mask when available.
+
+5. Keep the existing landmark-based mask as fallback.
+
+Pipeline result should become:
+
+Layer 1: Person image  
+Layer 2: Warped garment  
+Layer 3: Segmented body parts composited on top (arms / head / neck)
+
+This should improve realism significantly.
+
+---------------------------------------------------------------------
+
+STEP 2 — Improve garment warping
+
+Keep the existing warpGarment() logic but upgrade it.
+
+Current system:
+- 12 horizontal strips
+- simple scaling
+
+Upgrade requirements:
+
+1. Increase strip resolution to ~24 strips.
+
+2. Smooth interpolation between strips.
+
+3. Follow body centerline derived from landmarks.
+
+4. Add slight curvature near waist and shoulders.
+
+Do NOT introduce heavy GPU or ML dependencies here.
+
+---------------------------------------------------------------------
+
+STEP 3 — Prepare architecture for advanced ML try-on (future-ready)
+
+Create a modular interface for advanced warping engines.
+
+Add interface:
+
+src/services/virtual-tryon/warp-engine.ts
+
+Example interface:
+
+interface WarpEngine {
+  warpGarment(personImage, garmentImage, landmarks, measurements): Promise<ImageBuffer>
+}
+
+Implement engines:
+
+- geometricWarpEngine (current method)
+- placeholder for future ML engine (VITON-like)
+
+Do not implement ML inference yet — only structure.
+
+---------------------------------------------------------------------
+
+STEP 4 — Improve garment metadata
+
+Extend garment metadata to include:
+
+{
+  garmentCategory: "thobe | abaya | t-shirt | jacket",
+  fitType: "regular | loose | slim",
+  sizeChart: optional,
+  drapeFactor: number
+}
+
+Use drapeFactor to slightly control warp width.
+
+---------------------------------------------------------------------
+
+STEP 5 — Improve debugging visibility
+
+Add metadata in the API response:
+
+{
+  clothWarp: true/false,
+  occlusionMask: true/false,
+  segmentationUsed: true/false,
+  warpEngine: "geometric",
+  placementMethod: "body-measurements"
+}
+
+---------------------------------------------------------------------
+
+STEP 6 — Maintain compatibility
+
+Do NOT break:
+
+/virtual-fit/noor-virtual-fit-demo
+
+The page must continue working exactly as before.
+
+---------------------------------------------------------------------
+
+DELIVERABLES
+
+1) Exact files created or modified
+2) Segmentation logic implemented
+3) Updated garment warping behavior
+4) Before vs after pipeline description
+5) Confirmation that the route works
+6) Example metadata response
+
+---------------------------------------------------------------------
+
+Important:
+If segmentation fails or TensorFlow cannot load, automatically fall back to the existing landmark-based masking.
+
+The goal is a stable, production-friendly upgrade — not a full architecture rewrite.
