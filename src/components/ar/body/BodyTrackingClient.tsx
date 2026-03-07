@@ -127,6 +127,7 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
         enabled={trackingEnabled && cameraReady}
         showLandmarkDots={showDots}
         showLabels={showLabels}
+        mirrorVideo={facingMode === 'user'}
       />
 
       {/* Close button */}

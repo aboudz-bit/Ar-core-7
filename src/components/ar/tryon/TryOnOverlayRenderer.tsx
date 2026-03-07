@@ -18,6 +18,7 @@ interface TryOnOverlayRendererProps {
   placementMode: string;
   scale: number;
   enabled: boolean;
+  mirrorVideo?: boolean;
 }
 
 // Landmark indices
@@ -150,16 +151,18 @@ export function TryOnOverlayRenderer({
   placementMode,
   scale,
   enabled,
+  mirrorVideo = true,
 }: TryOnOverlayRendererProps) {
   const overlayImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const rafRef = useRef<number>(0);
-  // Use refs for frequently-changing values to avoid recreating the render loop
   const trackingResultRef = useRef(trackingResult);
   const scaleRef = useRef(scale);
   const placementModeRef = useRef(placementMode);
+  const mirrorVideoRef = useRef(mirrorVideo);
   trackingResultRef.current = trackingResult;
   scaleRef.current = scale;
   placementModeRef.current = placementMode;
+  mirrorVideoRef.current = mirrorVideo;
 
   // Pre-load overlay images; clean stale entries on overlay change
   useEffect(() => {
@@ -203,14 +206,16 @@ export function TryOnOverlayRenderer({
         canvas.height = video.videoHeight || 720;
       }
 
-      // Clear and draw mirrored video frame
+      const isMirrored = mirrorVideoRef.current;
+
       ctx.save();
-      ctx.translate(canvas.width, 0);
-      ctx.scale(-1, 1);
+      if (isMirrored) {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       ctx.restore();
 
-      // Draw overlay if face is tracked
       const result = trackingResultRef.current;
       if (result && result.landmarks.length > 0) {
         const { landmarks } = result;
@@ -230,12 +235,12 @@ export function TryOnOverlayRenderer({
             scaleRef.current
           );
 
-          // Mirror the x coordinate since we drew the video mirrored
-          const mirroredX = canvas.width - transform.x;
+          const drawX = isMirrored ? canvas.width - transform.x : transform.x;
+          const drawRotation = isMirrored ? -transform.rotation : transform.rotation;
 
           ctx.save();
-          ctx.translate(mirroredX, transform.y);
-          ctx.rotate(-transform.rotation); // Negate rotation for mirror
+          ctx.translate(drawX, transform.y);
+          ctx.rotate(drawRotation);
           ctx.drawImage(
             img,
             -transform.width / 2,

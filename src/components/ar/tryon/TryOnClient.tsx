@@ -180,6 +180,7 @@ export function TryOnClient({ experience, product, company, overlays, branding }
         placementMode={placementMode}
         scale={scale}
         enabled={trackingEnabled && cameraReady}
+        mirrorVideo={facingMode === 'user'}
       />
 
       {/* UI: Close button */}
