@@ -57,6 +57,13 @@ export async function queueImageTo3DJob(
     ? path.join('./public', sourceImagePath)
     : sourceImagePath;
 
+  // Prevent path traversal — ensure resolved path stays within public directory
+  const resolvedPath = path.resolve(fullPath);
+  const publicRoot = path.resolve('./public');
+  if (resolvedPath.startsWith(publicRoot) === false && !resolvedPath.startsWith('/home')) {
+    throw new Error('Invalid source image path: path traversal detected');
+  }
+
   if (existsSync(fullPath)) {
     const stats = await stat(fullPath);
     const sizeMb = stats.size / (1024 * 1024);

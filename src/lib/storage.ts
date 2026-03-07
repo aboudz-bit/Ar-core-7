@@ -385,6 +385,13 @@ async function saveFileLocal(buffer: Buffer, fileName: string, subDir: string = 
 
 async function deleteFileLocal(filePath: string): Promise<void> {
   const fullPath = path.join('./public', filePath);
+  // Prevent path traversal — ensure resolved path stays within public directory
+  const resolvedPath = path.resolve(fullPath);
+  const publicRoot = path.resolve('./public');
+  if (!resolvedPath.startsWith(publicRoot)) {
+    console.error('Path traversal attempt blocked:', filePath);
+    return;
+  }
   try {
     if (existsSync(fullPath)) {
       await unlink(fullPath);

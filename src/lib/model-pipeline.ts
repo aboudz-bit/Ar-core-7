@@ -170,6 +170,14 @@ async function validateGlb(filePath: string): Promise<boolean> {
       ? path.default.join('./public', filePath)
       : filePath;
 
+    // Prevent path traversal — ensure resolved path stays within expected directories
+    const resolvedPath = path.default.resolve(fullPath);
+    const publicRoot = path.default.resolve('./public');
+    if (!resolvedPath.startsWith(publicRoot) && !resolvedPath.startsWith('/home')) {
+      console.error('Path traversal attempt blocked in validateGlb:', filePath);
+      return false;
+    }
+
     const buffer = await fs.default.readFile(fullPath);
 
     // GLB magic number: 0x46546C67 ('glTF')

@@ -52,7 +52,7 @@ export default function ArJsMarkerDemoPage() {
                         <meta name="viewport" content="width=device-width,initial-scale=1">
                         <title>AR.js Marker Demo</title>
                         <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-                        <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+                        <script src="https://cdn.jsdelivr.net/npm/ar.js@3.4.5/aframe/build/aframe-ar.js"></script>
                         <style>body{margin:0;overflow:hidden;font-family:sans-serif}.info-overlay{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.7);color:white;padding:8px 16px;border-radius:20px;font-size:13px;z-index:100;white-space:nowrap;}</style>
                       </head>
                       <body>
