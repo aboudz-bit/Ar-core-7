@@ -36,10 +36,21 @@ prisma/
 - Role-based access control (Super Admin, Company Admin, Content Manager, Viewer)
 - Product management with 3D asset uploads (GLB, GLTF, USDZ)
 - AR experience creation and publishing
+- Face try-on (FACE_TRYON) — camera + MediaPipe face tracking for eyewear/accessories overlay
+- Body tracking (BODY_TRYON) — camera + MediaPipe pose estimation with skeleton rendering
+- Virtual fit (CLOTHING_TRYON_PHOTO) — photo upload-based garment overlay (no backend processing API)
 - Analytics tracking
 - QR code generation
 - API key management
 - Webhook support
+
+## Try-On Routes
+- `/tryon/[experienceSlug]` — Face try-on (requires camera, loads MediaPipe face mesh)
+- `/body/[experienceSlug]` — Body tracking (requires camera, loads MediaPipe pose)
+- `/virtual-fit/[experienceSlug]` — Photo-based virtual fit (no camera needed, upload-based UI)
+- Demo slugs: `optica-aviator-tryon`, `noor-body-tracking-demo`, `noor-virtual-fit-demo`
+- Data fetched by `src/lib/tryon.ts` → `getTryOnData(slug)`
+- Seed script: `prisma/seed-tryon.ts`
 
 ## Database
 - PostgreSQL via Replit's built-in database

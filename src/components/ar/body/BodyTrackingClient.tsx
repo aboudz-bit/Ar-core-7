@@ -88,12 +88,15 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
     return (
       <div className="min-h-screen bg-surface-900 flex flex-col items-center justify-center p-6 text-center">
         <AlertTriangle className="w-16 h-16 text-amber-400 mb-6" />
-        <h1 className="text-xl font-bold text-white mb-2">Camera Access Required</h1>
+        <h1 data-testid="text-experience-name" className="text-xl font-bold text-white mb-2">Camera Access Required</h1>
+        <p data-testid="text-product-title" className="text-base font-semibold text-white/80 mb-1">{product?.title || experience.name}</p>
+        <p data-testid="text-company-name" className="text-xs text-white/50 mb-4">{company.name}</p>
         <p className="text-sm text-white/60 mb-2 max-w-sm">
           Body tracking needs camera access to detect your pose and body landmarks.
         </p>
         <p className="text-xs text-white/40 mb-6 max-w-sm">{cameraError}</p>
         <button
+          data-testid="button-try-again"
           onClick={() => window.location.reload()}
           className="px-6 py-3 rounded-xl text-white font-semibold text-sm"
           style={{ backgroundColor: company.brandPrimary }}
