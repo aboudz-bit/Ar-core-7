@@ -1224,6 +1224,90 @@ async function main() {
   console.log('  Aviator Sunglasses (FACE_TRYON) — /tryon/optica-aviator-tryon');
   console.log('  Cat Eye Frames (FACE_TRYON) — /tryon/optica-cateye-tryon');
 
+  // ============================================================
+  // Body Tracking Demo — Noor Abaya Boutique
+  // ============================================================
+  console.log('Creating Body Tracking demo...');
+
+  const bodyTrackingDemo = await prisma.experience.create({
+    data: {
+      companyId: abayaBoutique.id,
+      productId: blackAbaya.id,
+      name: 'Abaya Body Tracking Demo',
+      slug: 'noor-body-tracking-demo',
+      experienceType: 'BODY_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'natural',
+      backgroundMode: 'camera',
+      ctaText: 'Shop Now',
+      ctaLink: 'https://noorabaya.com/black-abaya',
+      sceneConfig: { placementMode: 'BODY' },
+      analyticsEnabled: true,
+    },
+  });
+
+  await prisma.publishRecord.create({
+    data: {
+      experienceId: bodyTrackingDemo.id,
+      companyId: abayaBoutique.id,
+      publishStatus: 'PUBLISHED',
+      publicUrl: 'http://localhost:3000/body/noor-body-tracking-demo',
+      publishedAt: new Date(),
+      publishedBy: superAdmin.id,
+    },
+  });
+
+  console.log('  Body Tracking Demo (BODY_TRYON) — /body/noor-body-tracking-demo');
+
+  // ============================================================
+  // Clothing Try-On Photo Demo — Noor Abaya Boutique
+  // ============================================================
+  console.log('Creating Clothing Try-On Photo demo...');
+
+  const garmentImagePath = createPlaceholderImage(abayaBoutique.id, blackAbaya.id, 'black-abaya-garment.png');
+
+  const clothingTryOnDemo = await prisma.experience.create({
+    data: {
+      companyId: abayaBoutique.id,
+      productId: blackAbaya.id,
+      name: 'Abaya Virtual Fit Demo',
+      slug: 'noor-virtual-fit-demo',
+      experienceType: 'CLOTHING_TRYON_PHOTO',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'white',
+      ctaText: 'Buy This Abaya',
+      ctaLink: 'https://noorabaya.com/black-abaya',
+      sceneConfig: { placementMode: 'CLOTHING' },
+      analyticsEnabled: true,
+    },
+  });
+
+  // Add garment image asset for the clothing try-on experience
+  await prisma.productAsset.create({
+    data: {
+      productId: blackAbaya.id,
+      assetType: 'GARMENT_IMAGE',
+      fileName: 'black-abaya-garment.png',
+      filePath: garmentImagePath,
+      fileSize: 450000,
+      mimeType: 'image/png',
+    },
+  });
+
+  await prisma.publishRecord.create({
+    data: {
+      experienceId: clothingTryOnDemo.id,
+      companyId: abayaBoutique.id,
+      publishStatus: 'PUBLISHED',
+      publicUrl: 'http://localhost:3000/virtual-fit/noor-virtual-fit-demo',
+      publishedAt: new Date(),
+      publishedBy: superAdmin.id,
+    },
+  });
+
+  console.log('  Clothing Try-On Photo (CLOTHING_TRYON_PHOTO) — /virtual-fit/noor-virtual-fit-demo');
+
   console.log('Seed complete!');
   console.log('');
   console.log('Demo credentials:');
@@ -1240,6 +1324,8 @@ async function main() {
   console.log('Try-On experiences:');
   console.log('  Aviator Virtual Try-On — /tryon/optica-aviator-tryon');
   console.log('  Cat Eye Virtual Try-On — /tryon/optica-cateye-tryon');
+  console.log('  Body Tracking Demo — /body/noor-body-tracking-demo');
+  console.log('  Virtual Fit Demo — /virtual-fit/noor-virtual-fit-demo');
   console.log('');
   console.log(`Analytics events: ${analyticsData.length}`);
 }
