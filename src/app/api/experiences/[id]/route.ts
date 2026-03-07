@@ -71,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     action: 'UPDATE',
     entity: 'Experience',
     entityId: experience.id,
-    details: body,
+    details: { updatedFields: Object.keys(data) },
   });
 
   return NextResponse.json({ success: true, data: updated });

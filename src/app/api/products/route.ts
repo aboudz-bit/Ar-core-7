@@ -16,13 +16,22 @@ export async function GET(req: NextRequest) {
   const companyId = searchParams.get('companyId') || '';
   const status = searchParams.get('status') || '';
 
-  const companyIds = isSuperAdmin(session)
+  const userCompanyIds = isSuperAdmin(session)
     ? undefined
     : session.memberships.map((m) => m.companyId);
 
+  // If companyId filter is specified, validate the user has access to it
+  if (companyId && !isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Build tenant-safe filter: companyId param narrows within allowed companies
+  const effectiveCompanyFilter = companyId
+    ? { companyId }
+    : userCompanyIds ? { companyId: { in: userCompanyIds } } : {};
+
   const where = {
-    ...(companyIds ? { companyId: { in: companyIds } } : {}),
-    ...(companyId ? { companyId } : {}),
+    ...effectiveCompanyFilter,
     ...(status ? { status: status as 'DRAFT' | 'ACTIVE' | 'ARCHIVED' } : {}),
     ...(search
       ? {

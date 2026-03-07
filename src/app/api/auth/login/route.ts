@@ -7,13 +7,52 @@ import type { JWTPayload } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
+// Login rate limiter: 10 attempts per 15 minutes per IP
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const LOGIN_RATE_LIMIT = 10;
+const LOGIN_RATE_WINDOW = 15 * 60 * 1000; // 15 minutes
+
+// Cleanup stale entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  loginAttempts.forEach((entry, key) => {
+    if (now > entry.resetAt) loginAttempts.delete(key);
+  });
+}, 5 * 60 * 1000);
+
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit by IP
+    const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const now = Date.now();
+    const entry = loginAttempts.get(clientIp);
+
+    if (entry && now < entry.resetAt) {
+      entry.count++;
+      if (entry.count > LOGIN_RATE_LIMIT) {
+        const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
+        return NextResponse.json(
+          { success: false, error: 'Too many login attempts. Please try again later.' },
+          { status: 429, headers: { 'Retry-After': String(retryAfter) } }
+        );
+      }
+    } else {
+      loginAttempts.set(clientIp, { count: 1, resetAt: now + LOGIN_RATE_WINDOW });
+    }
+
     const { email, password } = await req.json();
 
     if (!email || !password) {
       return NextResponse.json(
         { success: false, error: 'Email and password are required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate input types
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Invalid input' },
         { status: 400 }
       );
     }
@@ -41,6 +80,9 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+
+    // Successful login — reset rate limit counter for this IP
+    loginAttempts.delete(clientIp);
 
     const payload: JWTPayload = {
       userId: user.id,

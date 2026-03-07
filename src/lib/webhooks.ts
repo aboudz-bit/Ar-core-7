@@ -8,7 +8,18 @@ export type WebhookEvent =
   | 'qr_opened'
   | 'asset_uploaded';
 
-const WEBHOOK_SIGNING_SECRET = process.env.WEBHOOK_SIGNING_SECRET || 'whsec_dev_secret';
+function getWebhookSigningSecret(): string {
+  const secret = process.env.WEBHOOK_SIGNING_SECRET;
+  if (!secret || secret === 'whsec_dev_secret' || secret === 'whsec_change-me-to-a-random-secret') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CRITICAL: WEBHOOK_SIGNING_SECRET must be set to a strong random value in production.');
+    }
+    console.warn('[SECURITY] Using insecure default WEBHOOK_SIGNING_SECRET. Set env var for production.');
+  }
+  return secret || 'whsec_dev_secret';
+}
+
+const WEBHOOK_SIGNING_SECRET = getWebhookSigningSecret();
 
 /**
  * Generate HMAC signature for webhook payload.
