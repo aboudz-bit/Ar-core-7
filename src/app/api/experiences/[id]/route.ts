@@ -1,0 +1,63 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getSession, isSuperAdmin } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+  const experience = await prisma.experience.findUnique({
+    where: { id: params.id },
+    include: {
+      company: true,
+      product: { include: { assets: true } },
+      publishRecords: { orderBy: { createdAt: 'desc' }, take: 5 },
+    },
+  });
+
+  if (!experience) {
+    return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+  }
+
+  if (!isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === experience.companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  return NextResponse.json({ success: true, data: experience });
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+  const experience = await prisma.experience.findUnique({ where: { id: params.id } });
+  if (!experience) return NextResponse.json({ success: false, error: 'Not found' }, { status: 404 });
+
+  if (!isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === experience.companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  const body = await req.json();
+  const updated = await prisma.experience.update({
+    where: { id: params.id },
+    data: body,
+    include: {
+      company: { select: { id: true, name: true, slug: true } },
+      product: { select: { id: true, title: true } },
+    },
+  });
+
+  await logAudit({
+    userId: session.userId,
+    companyId: experience.companyId,
+    action: 'UPDATE',
+    entity: 'Experience',
+    entityId: experience.id,
+    details: body,
+  });
+
+  return NextResponse.json({ success: true, data: updated });
+}

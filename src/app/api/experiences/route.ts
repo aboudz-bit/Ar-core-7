@@ -1,0 +1,97 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getSession, isSuperAdmin } from '@/lib/auth';
+import { logAudit } from '@/lib/audit';
+import { generateSlug } from '@/lib/utils';
+
+export const dynamic = 'force-dynamic';
+
+export async function GET(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const page = parseInt(searchParams.get('page') || '1');
+  const limit = parseInt(searchParams.get('limit') || '20');
+  const companyId = searchParams.get('companyId') || '';
+  const type = searchParams.get('type') || '';
+  const status = searchParams.get('status') || '';
+
+  const companyIds = isSuperAdmin(session)
+    ? undefined
+    : session.memberships.map((m) => m.companyId);
+
+  const where = {
+    ...(companyIds ? { companyId: { in: companyIds } } : {}),
+    ...(companyId ? { companyId } : {}),
+    ...(type ? { experienceType: type as 'PRODUCT_VIEWER' | 'SURFACE_AR' | 'IMAGE_TARGET' | 'QR_LAUNCH' | 'EMBED_VIEWER' } : {}),
+    ...(status ? { publishStatus: status as 'DRAFT' | 'READY' | 'PUBLISHED' | 'ARCHIVED' } : {}),
+  };
+
+  const [experiences, total] = await Promise.all([
+    prisma.experience.findMany({
+      where,
+      include: {
+        company: { select: { id: true, name: true, slug: true } },
+        product: { select: { id: true, title: true, thumbnailUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.experience.count({ where }),
+  ]);
+
+  return NextResponse.json({
+    success: true,
+    data: experiences,
+    meta: { page, limit, total },
+  });
+}
+
+export async function POST(req: NextRequest) {
+  const session = await getSession();
+  if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+
+  const body = await req.json();
+  const { companyId, productId, name, experienceType, ...rest } = body;
+
+  if (!companyId || !name || !experienceType) {
+    return NextResponse.json(
+      { success: false, error: 'companyId, name, and experienceType are required' },
+      { status: 400 }
+    );
+  }
+
+  if (!isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  const slug = `${generateSlug()}-${name.toLowerCase().replace(/\s+/g, '-').slice(0, 20)}`;
+
+  const experience = await prisma.experience.create({
+    data: {
+      companyId,
+      productId: productId || null,
+      name,
+      slug,
+      experienceType,
+      ...rest,
+    },
+    include: {
+      company: { select: { id: true, name: true, slug: true } },
+      product: { select: { id: true, title: true } },
+    },
+  });
+
+  await logAudit({
+    userId: session.userId,
+    companyId,
+    action: 'CREATE',
+    entity: 'Experience',
+    entityId: experience.id,
+    details: { name, experienceType },
+  });
+
+  return NextResponse.json({ success: true, data: experience }, { status: 201 });
+}
