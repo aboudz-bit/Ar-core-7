@@ -314,7 +314,6 @@ async function main() {
         },
       });
 
-      const glbPath = createPlaceholderGlb(company.id, product.id, `${prod.slug}.glb`, prod.color);
       const posterPath = createPlaceholderImage(company.id, product.id, `${prod.slug}-poster.png`);
       const thumbnailPath = createPlaceholderImage(company.id, product.id, `${prod.slug}-thumb.png`);
 
@@ -323,9 +322,9 @@ async function main() {
           {
             productId: product.id,
             assetType: 'MODEL_GLB',
-            fileName: `${prod.slug}.glb`,
-            filePath: glbPath,
-            fileSize: 4096,
+            fileName: 'food.glb',
+            filePath: '/demo-models/food.glb',
+            fileSize: 2869044,
             mimeType: 'model/gltf-binary',
             isProcessed: true,
             processingStatus: 'optimized',

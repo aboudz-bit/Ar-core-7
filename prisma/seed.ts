@@ -454,7 +454,6 @@ async function main() {
   // ============================================================
   console.log('Creating demo asset files for Premium Running Sneaker...');
 
-  const sneakerGlbPath = createPlaceholderGlb(luxeBrands.id, sneaker.id, 'sneaker-model.glb');
   const sneakerThumbnailPath = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-thumbnail.png');
   const sneakerPosterPath = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-poster.png');
   const sneakerImage1Path = createPlaceholderImage(luxeBrands.id, sneaker.id, 'sneaker-front.png');
@@ -466,9 +465,9 @@ async function main() {
       {
         productId: sneaker.id,
         assetType: 'MODEL_GLB',
-        fileName: 'sneaker-model.glb',
-        filePath: sneakerGlbPath,
-        fileSize: 2457600, // ~2.4MB
+        fileName: 'food.glb',
+        filePath: '/demo-models/food.glb',
+        fileSize: 2869044,
         mimeType: 'model/gltf-binary',
       },
       {
@@ -521,7 +520,6 @@ async function main() {
   });
 
   // Create partial assets for the watch (model + thumbnail only)
-  const watchGlbPath = createPlaceholderGlb(luxeBrands.id, watch.id, 'watch-model.glb');
   const watchThumbnailPath = createPlaceholderImage(luxeBrands.id, watch.id, 'watch-thumbnail.png');
 
   await prisma.productAsset.createMany({
@@ -529,9 +527,9 @@ async function main() {
       {
         productId: watch.id,
         assetType: 'MODEL_GLB',
-        fileName: 'watch-model.glb',
-        filePath: watchGlbPath,
-        fileSize: 1800000,
+        fileName: 'food.glb',
+        filePath: '/demo-models/food.glb',
+        fileSize: 2869044,
         mimeType: 'model/gltf-binary',
       },
       {
@@ -551,14 +549,13 @@ async function main() {
   });
 
   // Create a model asset for headphones
-  const hpGlbPath = createPlaceholderGlb(techGear.id, headphones.id, 'headphones-model.glb');
   await prisma.productAsset.create({
     data: {
       productId: headphones.id,
       assetType: 'MODEL_GLB',
-      fileName: 'headphones-model.glb',
-      filePath: hpGlbPath,
-      fileSize: 3200000,
+      fileName: 'food.glb',
+      filePath: '/demo-models/food.glb',
+      fileSize: 2869044,
       mimeType: 'model/gltf-binary',
     },
   });
@@ -806,10 +803,7 @@ async function main() {
   });
 
   // Create GLB models for pizzas (flat disc geometry)
-  const margheritaGlbPath = createPizzaGlb(pizzaDemo.id, margherita.id, 'margherita-pizza.glb', [0.9, 0.3, 0.1]);
   const margheritaPosterPath = createPlaceholderImage(pizzaDemo.id, margherita.id, 'margherita-poster.png');
-
-  const pepperoniGlbPath = createPizzaGlb(pizzaDemo.id, pepperoni.id, 'pepperoni-pizza.glb', [0.8, 0.2, 0.1]);
   const pepperoniPosterPath = createPlaceholderImage(pizzaDemo.id, pepperoni.id, 'pepperoni-poster.png');
 
   await prisma.productAsset.createMany({
@@ -817,9 +811,9 @@ async function main() {
       {
         productId: margherita.id,
         assetType: 'MODEL_GLB',
-        fileName: 'margherita-pizza.glb',
-        filePath: margheritaGlbPath,
-        fileSize: 4096,
+        fileName: 'food.glb',
+        filePath: '/demo-models/food.glb',
+        fileSize: 2869044,
         mimeType: 'model/gltf-binary',
         isProcessed: true,
         processingStatus: 'optimized',
@@ -835,9 +829,9 @@ async function main() {
       {
         productId: pepperoni.id,
         assetType: 'MODEL_GLB',
-        fileName: 'pepperoni-pizza.glb',
-        filePath: pepperoniGlbPath,
-        fileSize: 4096,
+        fileName: 'food.glb',
+        filePath: '/demo-models/food.glb',
+        fileSize: 2869044,
         mimeType: 'model/gltf-binary',
         isProcessed: true,
         processingStatus: 'optimized',

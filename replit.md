@@ -47,6 +47,11 @@ prisma/
 - Run `npx prisma db push` to sync schema
 - Run `npx tsx prisma/seed.ts` to seed demo data
 
+## Demo 3D Models
+- All demo products use `/demo-models/food.glb` (Astronaut model from modelviewer.dev) as a placeholder GLB
+- The GLB file lives in `public/demo-models/food.glb`
+- Asset records in the database reference this path via `ProductAsset.filePath` with `assetType = MODEL_GLB`
+
 ## Demo Credentials
 - Super Admin: admin@arcore7.com / admin123
 - Company Admin: sarah@luxebrands.com / admin123
