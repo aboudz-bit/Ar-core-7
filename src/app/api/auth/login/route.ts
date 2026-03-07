@@ -83,10 +83,21 @@ export async function POST(req: NextRequest) {
     });
 
     return response;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Login error:', error);
+    const isConnectionError =
+      error instanceof Error &&
+      (error.message.includes('connect') ||
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('P1001') ||
+        error.message.includes('P1002'));
     return NextResponse.json(
-      { success: false, error: 'Internal server error' },
+      {
+        success: false,
+        error: isConnectionError
+          ? 'Database connection failed. Please check DATABASE_URL configuration.'
+          : 'Internal server error',
+      },
       { status: 500 }
     );
   }
