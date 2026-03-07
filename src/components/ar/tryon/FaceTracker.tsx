@@ -185,13 +185,22 @@ export function useTryOnCamera() {
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (mode?: 'user' | 'environment') => {
+    const targetMode = mode ?? facingMode;
     try {
-      console.log('[Camera] Requesting getUserMedia...');
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setCameraReady(false);
+      setCameraError(null);
+
+      console.log('[Camera] Requesting getUserMedia, facingMode:', targetMode);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode: 'user',
+          facingMode: { ideal: targetMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -251,7 +260,13 @@ export function useTryOnCamera() {
       console.error('[Camera] Failed:', message, err);
       setCameraError(message);
     }
-  }, []);
+  }, [facingMode]);
+
+  const switchCamera = useCallback(() => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    startCamera(newMode);
+  }, [facingMode, startCamera]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -265,5 +280,5 @@ export function useTryOnCamera() {
     return () => { stopCamera(); };
   }, [stopCamera]);
 
-  return { videoRef, cameraReady, cameraError, startCamera, stopCamera };
+  return { videoRef, cameraReady, cameraError, startCamera, stopCamera, switchCamera, facingMode };
 }

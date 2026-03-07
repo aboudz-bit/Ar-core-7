@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, ExternalLink, Loader2, SwitchCamera } from 'lucide-react';
 import { FaceTracker, useTryOnCamera } from './FaceTracker';
 import { TryOnOverlayRenderer } from './TryOnOverlayRenderer';
 import type { FaceTrackingResult } from './FaceTracker';
@@ -47,7 +47,7 @@ interface TryOnClientProps {
 type AppState = 'loading' | 'ready' | 'camera_error' | 'tracking' | 'no_face';
 
 export function TryOnClient({ experience, product, company, overlays, branding }: TryOnClientProps) {
-  const { videoRef, cameraReady, cameraError, startCamera, stopCamera } = useTryOnCamera();
+  const { videoRef, cameraReady, cameraError, startCamera, stopCamera, switchCamera, facingMode } = useTryOnCamera();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [trackingResult, setTrackingResult] = useState<FaceTrackingResult | null>(null);
   const [appState, setAppState] = useState<AppState>('loading');
@@ -211,15 +211,17 @@ export function TryOnClient({ experience, product, company, overlays, branding }
         </div>
       )}
 
-      {/* UI: Scale controls */}
+      {/* UI: Scale controls + camera switch */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 flex gap-2">
         <button
+          data-testid="button-scale-down"
           onClick={handleScaleDown}
           className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
         <button
+          data-testid="button-scale-reset"
           onClick={handleScaleReset}
           className="px-4 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center text-xs font-medium"
         >
@@ -227,10 +229,19 @@ export function TryOnClient({ experience, product, company, overlays, branding }
           Reset
         </button>
         <button
+          data-testid="button-scale-up"
           onClick={handleScaleUp}
           className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center"
         >
           <ZoomIn className="w-4 h-4" />
+        </button>
+        <button
+          data-testid="button-switch-camera"
+          onClick={switchCamera}
+          className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center"
+          title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+        >
+          <SwitchCamera className="w-4 h-4" />
         </button>
       </div>
 

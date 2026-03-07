@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, AlertTriangle, Loader2, Eye, EyeOff, Tags } from 'lucide-react';
+import { X, AlertTriangle, Loader2, Eye, EyeOff, Tags, SwitchCamera } from 'lucide-react';
 import { BodyTracker, useBodyCamera } from './BodyTracker';
 import { BodySkeletonRenderer } from './BodySkeletonRenderer';
 import type { BodyTrackingResult } from './BodyTracker';
@@ -35,7 +35,7 @@ interface BodyTrackingClientProps {
 type AppState = 'loading' | 'ready' | 'camera_error' | 'tracking' | 'no_body';
 
 export function BodyTrackingClient({ experience, product, company, branding }: BodyTrackingClientProps) {
-  const { videoRef, cameraReady, cameraError, startCamera, stopCamera } = useBodyCamera('user');
+  const { videoRef, cameraReady, cameraError, startCamera, stopCamera, switchCamera, facingMode } = useBodyCamera('user');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [trackingResult, setTrackingResult] = useState<BodyTrackingResult | null>(null);
   const [appState, setAppState] = useState<AppState>('loading');
@@ -158,9 +158,10 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
         </div>
       )}
 
-      {/* Debug controls */}
+      {/* Debug controls + camera switch */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 flex gap-2">
         <button
+          data-testid="button-toggle-landmarks"
           onClick={() => setShowDots((v) => !v)}
           className={`h-11 px-4 rounded-full backdrop-blur-md border flex items-center justify-center text-xs font-medium gap-1.5 ${
             showDots ? 'bg-white/20 text-white border-white/30' : 'bg-white/5 text-white/50 border-white/10'
@@ -170,6 +171,7 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
           Landmarks
         </button>
         <button
+          data-testid="button-toggle-labels"
           onClick={() => setShowLabels((v) => !v)}
           className={`h-11 px-4 rounded-full backdrop-blur-md border flex items-center justify-center text-xs font-medium gap-1.5 ${
             showLabels ? 'bg-white/20 text-white border-white/30' : 'bg-white/5 text-white/50 border-white/10'
@@ -177,6 +179,14 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
         >
           <Tags className="w-3.5 h-3.5" />
           Labels
+        </button>
+        <button
+          data-testid="button-switch-camera"
+          onClick={switchCamera}
+          className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center"
+          title={facingMode === 'user' ? 'Switch to back camera' : 'Switch to front camera'}
+        >
+          <SwitchCamera className="w-4 h-4" />
         </button>
       </div>
 

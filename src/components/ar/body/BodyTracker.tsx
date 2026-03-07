@@ -126,18 +126,27 @@ export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) 
   return null;
 }
 
-export function useBodyCamera(facingMode: 'user' | 'environment' = 'user') {
+export function useBodyCamera(initialFacingMode: 'user' | 'environment' = 'user') {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>(initialFacingMode);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (mode?: 'user' | 'environment') => {
+    const targetMode = mode ?? facingMode;
     try {
-      console.log('[BodyCamera] Requesting getUserMedia...');
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setCameraReady(false);
+      setCameraError(null);
+
+      console.log('[BodyCamera] Requesting getUserMedia, facingMode:', targetMode);
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          facingMode,
+          facingMode: { ideal: targetMode },
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
@@ -199,6 +208,12 @@ export function useBodyCamera(facingMode: 'user' | 'environment' = 'user') {
     }
   }, [facingMode]);
 
+  const switchCamera = useCallback(() => {
+    const newMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newMode);
+    startCamera(newMode);
+  }, [facingMode, startCamera]);
+
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
@@ -211,5 +226,5 @@ export function useBodyCamera(facingMode: 'user' | 'environment' = 'user') {
     return () => { stopCamera(); };
   }, [stopCamera]);
 
-  return { videoRef, cameraReady, cameraError, startCamera, stopCamera };
+  return { videoRef, cameraReady, cameraError, startCamera, stopCamera, switchCamera, facingMode };
 }
