@@ -22,6 +22,7 @@ export interface ViewerData {
     targetImageUrl: string | null;
     fallbackImageUrl: string | null;
     scalePreset: number;
+    generationStatus: string | null;
   } | null;
   company: {
     id: string;
@@ -91,6 +92,7 @@ export async function getViewerData(experienceSlug: string): Promise<ViewerData 
       targetImageUrl: targetAsset?.filePath || null,
       fallbackImageUrl: posterAsset?.filePath || thumbnailAsset?.filePath || imageAsset?.filePath || experience.product?.thumbnailUrl || null,
       scalePreset: experience.product.scalePreset,
+      generationStatus: experience.product.status,
     } : null,
     company: {
       id: experience.company.id,
@@ -115,7 +117,7 @@ export async function getViewerData(experienceSlug: string): Promise<ViewerData 
 export async function getViewerDataByProductSlug(productSlug: string): Promise<ViewerData | null> {
   // Find product by matching slug-style title across all companies
   const products = await prisma.product.findMany({
-    where: { status: 'ACTIVE' },
+    where: { status: { in: ['ACTIVE', 'AR_READY'] } },
     include: {
       assets: true,
       company: true,

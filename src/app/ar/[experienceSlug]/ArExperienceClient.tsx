@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Box, Smartphone, Camera, AlertTriangle, ExternalLink, ImageIcon } from 'lucide-react';
+import { Box, Smartphone, Camera, AlertTriangle, ExternalLink, ImageIcon, Loader2 } from 'lucide-react';
 
 interface Props {
   experience: {
@@ -22,6 +22,7 @@ interface Props {
     posterUrl: string | null;
     targetImageUrl: string | null;
     fallbackImageUrl: string | null;
+    generationStatus: string | null;
   } | null;
   company: {
     id: string;
@@ -144,6 +145,9 @@ export function ArExperienceClient({ experience, product, company, branding }: P
     }
 
     if (product?.fallbackImageUrl) {
+      const isGenerating = product.generationStatus === 'GENERATING_3D';
+      const generationFailed = product.generationStatus === 'GENERATION_FAILED';
+
       return (
         <div className="min-h-screen bg-white flex flex-col">
           <header className="h-14 flex items-center justify-between px-4 border-b border-surface-100 bg-white z-10">
@@ -153,7 +157,16 @@ export function ArExperienceClient({ experience, product, company, branding }: P
               </div>
               <span className="text-sm font-semibold text-surface-900">{experience.name}</span>
             </div>
-            <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 font-medium">Image Preview</span>
+            {isGenerating ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-600 font-medium flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Generating 3D
+              </span>
+            ) : generationFailed ? (
+              <span className="text-xs px-2 py-1 rounded-full bg-red-50 text-red-600 font-medium">Generation Failed</span>
+            ) : (
+              <span className="text-xs px-2 py-1 rounded-full bg-indigo-50 text-indigo-600 font-medium">Image Preview</span>
+            )}
           </header>
 
           <div className="flex-1 flex items-center justify-center p-6" style={{ minHeight: '70vh', background: 'linear-gradient(180deg,#f8f9fa 0%,#fff 100%)' }}>
@@ -169,9 +182,20 @@ export function ArExperienceClient({ experience, product, company, branding }: P
                   <p className="text-sm text-surface-500 mt-1">{company.name}</p>
                 </div>
               </div>
-              <p className="text-xs text-surface-400 text-center mt-4">
-                3D model not available. Showing product image preview.
-              </p>
+              {isGenerating ? (
+                <div className="flex items-center justify-center gap-2 mt-4 text-amber-600">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <p className="text-xs font-medium">Generating 3D model... AR view coming soon.</p>
+                </div>
+              ) : generationFailed ? (
+                <p className="text-xs text-red-400 text-center mt-4">
+                  3D model generation failed. Showing product image preview.
+                </p>
+              ) : (
+                <p className="text-xs text-surface-400 text-center mt-4">
+                  3D model not available. Showing product image preview.
+                </p>
+              )}
             </div>
           </div>
 

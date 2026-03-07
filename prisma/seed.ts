@@ -238,6 +238,8 @@ async function main() {
   console.log('Seeding AR-core-7 database...');
 
   // Clean existing data
+  await prisma.imageTo3DJob.deleteMany();
+  await prisma.modelOptimizationJob.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.analyticsEvent.deleteMany();
   await prisma.publishRecord.deleteMany();
@@ -906,6 +908,144 @@ async function main() {
   console.log('Pizza Demo Restaurant created!');
   console.log('  Products: Margherita Pizza, Pepperoni Pizza');
   console.log('  Routes: /demo, /launch/margherita, /launch/pepperoni');
+
+  // ============================================================
+  // Image-to-3D Pipeline Test Products
+  // These products have IMAGE_ONLY status to test the automated pipeline
+  // ============================================================
+  console.log('Creating Image-to-3D test products...');
+
+  const steakHouse = await prisma.company.create({
+    data: {
+      name: 'Steak House Al Khobar Premium',
+      slug: 'steak-house-alkhobar',
+      brandPrimary: '#c0392b',
+      brandSecondary: '#e74c3c',
+      domain: 'steakhouse-alkhobar.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: steakHouse.id, role: 'SUPER_ADMIN' },
+  });
+
+  const abayaBoutique = await prisma.company.create({
+    data: {
+      name: 'Noor Abaya Boutique',
+      slug: 'noor-abaya',
+      brandPrimary: '#1a1a2e',
+      brandSecondary: '#16213e',
+      domain: 'noorabaya.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: abayaBoutique.id, role: 'SUPER_ADMIN' },
+  });
+
+  // Wagyu Steak — IMAGE_ONLY (ready for image-to-3D pipeline)
+  const wagyuSteak = await prisma.product.create({
+    data: {
+      companyId: steakHouse.id,
+      title: 'Wagyu Steak',
+      sku: 'SH-WGY-001',
+      category: 'Steak',
+      description: 'Dry-aged A5 Japanese wagyu ribeye, charcoal-grilled to perfection with truffle butter and seasonal vegetables.',
+      brand: 'Steak House Premium',
+      status: 'IMAGE_ONLY',
+      tags: ['wagyu', 'steak', 'premium', 'japanese'],
+      scalePreset: 0.3,
+      anchorType: 'table',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const wagyuImagePath = createPlaceholderImage(steakHouse.id, wagyuSteak.id, 'wagyu-steak.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: wagyuSteak.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'wagyu-steak.jpg',
+      filePath: wagyuImagePath,
+      fileSize: 250000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: wagyuSteak.id },
+    data: { thumbnailUrl: wagyuImagePath },
+  });
+
+  // Tomahawk Steak — IMAGE_ONLY
+  const tomahawkSteak = await prisma.product.create({
+    data: {
+      companyId: steakHouse.id,
+      title: 'Tomahawk Steak',
+      sku: 'SH-TMH-001',
+      category: 'Steak',
+      description: '1.2kg bone-in tomahawk ribeye, wood-fired and served with roasted garlic, bone marrow, and peppercorn sauce.',
+      brand: 'Steak House Premium',
+      status: 'IMAGE_ONLY',
+      tags: ['tomahawk', 'steak', 'bone-in', 'premium'],
+      scalePreset: 0.35,
+      anchorType: 'table',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const tomahawkImagePath = createPlaceholderImage(steakHouse.id, tomahawkSteak.id, 'tomahawk-steak.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: tomahawkSteak.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'tomahawk-steak.jpg',
+      filePath: tomahawkImagePath,
+      fileSize: 280000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: tomahawkSteak.id },
+    data: { thumbnailUrl: tomahawkImagePath },
+  });
+
+  // Black Abaya — IMAGE_ONLY
+  const blackAbaya = await prisma.product.create({
+    data: {
+      companyId: abayaBoutique.id,
+      title: 'Black Abaya',
+      sku: 'NA-BLK-001',
+      category: 'Abaya',
+      description: 'Elegant black abaya with intricate embroidery and flowing silhouette. Premium crepe fabric with hand-stitched details.',
+      brand: 'Noor Couture',
+      status: 'IMAGE_ONLY',
+      tags: ['abaya', 'black', 'embroidery', 'premium'],
+      scalePreset: 1.0,
+      anchorType: 'floor',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const abayaImagePath = createPlaceholderImage(abayaBoutique.id, blackAbaya.id, 'black-abaya.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: blackAbaya.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'black-abaya.jpg',
+      filePath: abayaImagePath,
+      fileSize: 320000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: blackAbaya.id },
+    data: { thumbnailUrl: abayaImagePath },
+  });
+
+  console.log('Image-to-3D test products created!');
+  console.log('  Wagyu Steak (IMAGE_ONLY) — ready for pipeline');
+  console.log('  Tomahawk Steak (IMAGE_ONLY) — ready for pipeline');
+  console.log('  Black Abaya (IMAGE_ONLY) — ready for pipeline');
 
   console.log('Seed complete!');
   console.log('');

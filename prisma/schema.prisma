@@ -16,7 +16,11 @@ enum UserRole {
 
 enum ProductStatus {
   DRAFT
+  IMAGE_ONLY
+  GENERATING_3D
+  AR_READY
   ACTIVE
+  GENERATION_FAILED
   ARCHIVED
 }
 
@@ -170,6 +174,7 @@ model ProductAsset {
   fileSize      Int
   mimeType      String
   metadata      Json?
+  source        String    @default("manual") // manual, ai_generated
   isProcessed   Boolean   @default(false)
   processingStatus String? @default("pending")
   createdAt     DateTime  @default(now())
@@ -351,4 +356,27 @@ model ModelOptimizationJob {
 
   @@index([status])
   @@index([assetId])
+}
+
+model ImageTo3DJob {
+  id              String    @id @default(cuid())
+  productId       String
+  companyId       String
+  sourceAssetId   String    // The IMAGE_2D asset that triggered generation
+  sourceImagePath String    // Path to the source image
+  status          String    @default("pending") // pending, processing, completed, failed
+  provider        String    @default("triposr") // triposr, instantmesh
+  outputGlbPath   String?
+  outputAssetId   String?   // The generated MODEL_GLB asset ID
+  errorMessage    String?
+  retryCount      Int       @default(0)
+  maxRetries      Int       @default(3)
+  metadata        Json?     // { inferenceTime, modelVertices, modelSize, etc. }
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([productId])
+  @@index([status])
+  @@index([companyId])
 }

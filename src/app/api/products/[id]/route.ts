@@ -28,7 +28,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ success: true, data: product });
+  // Include latest generation job if any
+  const generationJob = await prisma.imageTo3DJob.findFirst({
+    where: { productId: params.id },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      ...product,
+      generationJob: generationJob ? {
+        id: generationJob.id,
+        status: generationJob.status,
+        provider: generationJob.provider,
+        errorMessage: generationJob.errorMessage,
+        startedAt: generationJob.startedAt,
+        completedAt: generationJob.completedAt,
+      } : null,
+    },
+  });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
