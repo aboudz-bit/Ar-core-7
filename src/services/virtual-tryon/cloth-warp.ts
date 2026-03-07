@@ -1,30 +1,5 @@
-/**
- * Cloth Warping Service (Section-based geometric warp)
- *
- * Splits a garment image into horizontal strips and scales each strip
- * independently to follow the body's width profile from shoulders → hips.
- * This makes the garment appear to conform to the body shape instead of
- * sitting as a flat rectangle.
- *
- * HONEST DISCLAIMER:
- * This is NOT physics-based cloth simulation or AI cloth deformation.
- * It is a geometric approximation that:
- *   - Splits the garment into horizontal sections
- *   - Scales each section width based on interpolated body width at that Y
- *   - Applies optional vertical curvature to follow the torso centerline
- *
- * It produces a meaningful visual improvement for front-facing poses
- * but does NOT model fabric drape, folds, wrinkles, or 3D cloth behavior.
- *
- * Production upgrade path:
- *   - TPS (Thin Plate Spline) warp with dense correspondences
- *   - VITON-HD / HR-VITON style ML warping network
- *   - 3D garment mesh deformation
- */
-
 import type { BodyMeasurements } from '@/services/body/body-measurements';
 
-/** MediaPipe Pose landmark indices we use for warping */
 const LM = {
   LEFT_SHOULDER: 11,
   RIGHT_SHOULDER: 12,
@@ -33,105 +8,76 @@ const LM = {
 } as const;
 
 interface LandmarkPoint {
-  x: number; // normalized 0–1
+  x: number;
   y: number;
   z: number;
   visibility: number;
 }
 
 export interface WarpParams {
-  /** Body measurements (from body-measurements service) */
   measurements: BodyMeasurements;
-  /** Raw landmarks for fine-grained width interpolation */
   landmarks: LandmarkPoint[];
-  /** Target garment total height in pixels */
   targetHeight: number;
-  /** Image width for pixel conversion */
   imageWidth: number;
-  /** Image height for pixel conversion */
   imageHeight: number;
-  /** Number of horizontal strips to split into (more = smoother, slower) */
   stripCount?: number;
+  drapeFactor?: number;
 }
 
 export interface WarpResult {
-  /** The warped garment as a PNG buffer */
   buffer: Buffer;
-  /** Width of the output canvas */
   canvasWidth: number;
-  /** Height of the output canvas */
   canvasHeight: number;
-  /** Per-strip width info for debugging */
   strips: Array<{ y: number; width: number; offsetX: number }>;
-  /** Method description */
   method: 'section-geometric-warp';
+  stripCount: number;
 }
 
-/**
- * Compute the body width at a given normalized Y position by interpolating
- * between shoulder width and hip width, with optional curvature for the
- * natural torso taper (chest → waist → hip).
- *
- * The body profile is modeled as:
- *   - Shoulders (t=0): full shoulder width
- *   - Waist (t≈0.55): narrower (waist taper)
- *   - Hips (t=1): hip width
- *
- * This produces a subtle hourglass or V-taper shape depending on proportions.
- */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function cubicInterpolate(y0: number, y1: number, y2: number, y3: number, t: number): number {
+  const a = -0.5 * y0 + 1.5 * y1 - 1.5 * y2 + 0.5 * y3;
+  const b = y0 - 2.5 * y1 + 2 * y2 - 0.5 * y3;
+  const c = -0.5 * y0 + 0.5 * y2;
+  const d = y1;
+  return a * t * t * t + b * t * t + c * t + d;
+}
+
 function bodyWidthAtT(
   t: number,
   shoulderWidthPx: number,
   hipWidthPx: number,
+  drapeFactor: number,
 ): number {
-  // Clamp t to [0, 1]
   const tc = Math.max(0, Math.min(1, t));
 
-  // Waist taper: narrowest point at ~55% down the torso
-  // waistRatio < 1 means waist is narrower than linear interpolation
   const waistPosition = 0.55;
-  const waistRatio = 0.85; // waist is ~85% of the linear interpolation
+  const waistRatio = 0.82;
 
-  // Simple two-segment interpolation with waist dip:
-  // segment 1: shoulder → waist (0 → waistPosition)
-  // segment 2: waist → hip (waistPosition → 1)
+  const shoulderBulge = 1.0 + 0.04 * smoothstep(0, 0.12, tc) * (1 - smoothstep(0.12, 0.25, tc));
+
   const linearWidth = shoulderWidthPx + (hipWidthPx - shoulderWidthPx) * tc;
 
-  // Apply Gaussian-like waist taper centered at waistPosition
-  const waistDist = (tc - waistPosition) / 0.3; // normalized distance from waist
+  const waistDist = (tc - waistPosition) / 0.25;
   const waistFactor = 1 - (1 - waistRatio) * Math.exp(-waistDist * waistDist);
 
-  return linearWidth * waistFactor;
+  return linearWidth * waistFactor * shoulderBulge * drapeFactor;
 }
 
-/**
- * Compute the body centerline X offset at a normalized Y position.
- * If the torso has a slight lean (shoulder center != hip center),
- * the garment strips follow that lean.
- */
 function bodyCenterXAtT(
   t: number,
   shoulderCenterXPx: number,
   hipCenterXPx: number,
 ): number {
   const tc = Math.max(0, Math.min(1, t));
-  return shoulderCenterXPx + (hipCenterXPx - shoulderCenterXPx) * tc;
+  const mid = shoulderCenterXPx + (hipCenterXPx - shoulderCenterXPx) * tc;
+  const curvature = Math.sin(tc * Math.PI) * 0.005 * Math.abs(hipCenterXPx - shoulderCenterXPx);
+  return mid + curvature;
 }
 
-/**
- * Warp a garment image to follow body contours.
- *
- * Algorithm:
- * 1. Split garment into N horizontal strips
- * 2. For each strip, compute the body width at that Y-level
- * 3. Resize the strip to match that width
- * 4. Position each strip on a canvas, centered on the body centerline
- * 5. Return the assembled warped garment
- *
- * @param garmentBuffer - Original garment image as PNG buffer
- * @param params - Warp parameters (measurements, landmarks, etc.)
- * @returns Warped garment buffer and metadata
- */
 export async function warpGarment(
   garmentBuffer: Buffer,
   params: WarpParams,
@@ -144,10 +90,10 @@ export async function warpGarment(
     targetHeight,
     imageWidth,
     imageHeight,
-    stripCount = 12,
+    stripCount = 24,
+    drapeFactor = 1.0,
   } = params;
 
-  // Get precise landmark positions for shoulder/hip centers
   const ls = landmarks[LM.LEFT_SHOULDER];
   const rs = landmarks[LM.RIGHT_SHOULDER];
   const lh = landmarks[LM.LEFT_HIP];
@@ -156,47 +102,71 @@ export async function warpGarment(
   const shoulderCenterXPx = ((ls.x + rs.x) / 2) * imageWidth;
   const hipCenterXPx = ((lh.x + rh.x) / 2) * imageWidth;
 
-  // Use measurement values (may include profile-based bodyBuildFactor)
-  const shoulderW = measurements.shoulderWidthPx * 1.2; // garment is ~120% of shoulder width
-  const hipW = measurements.hipWidthPx * 1.15;           // garment is ~115% of hip width
+  const shoulderW = measurements.shoulderWidthPx * 1.2;
+  const hipW = measurements.hipWidthPx * 1.15;
 
-  // Get garment source dimensions
   const garmentMeta = await sharp(garmentBuffer).metadata();
   const srcW = garmentMeta.width || 200;
   const srcH = garmentMeta.height || 300;
 
-  // Ensure reasonable strip count
-  const strips = Math.max(4, Math.min(stripCount, Math.floor(targetHeight / 4)));
+  const strips = Math.max(6, Math.min(stripCount, Math.floor(targetHeight / 3)));
   const stripHeight = Math.max(1, Math.floor(targetHeight / strips));
 
-  // Compute the max width across all strips (for the output canvas)
+  const rawWidths: number[] = [];
+  for (let i = 0; i < strips; i++) {
+    const t = i / (strips - 1);
+    rawWidths.push(Math.max(20, bodyWidthAtT(t, shoulderW, hipW, drapeFactor)));
+  }
+
+  const smoothedWidths: number[] = [];
+  if (strips < 6) {
+    smoothedWidths.push(...rawWidths);
+  } else {
+    const windowSize = 3;
+    for (let i = 0; i < strips; i++) {
+      let sum = 0;
+      let count = 0;
+      for (let j = Math.max(0, i - windowSize); j <= Math.min(strips - 1, i + windowSize); j++) {
+        const weight = 1.0 / (1 + Math.abs(j - i));
+        sum += rawWidths[j] * weight;
+        count += weight;
+      }
+      const smoothed = sum / count;
+
+      const i0 = Math.max(0, i - 1);
+      const i1 = i;
+      const i2 = Math.min(strips - 1, i + 1);
+      const i3 = Math.min(strips - 1, i + 2);
+      const cubicSmoothed = cubicInterpolate(rawWidths[i0], rawWidths[i1], rawWidths[i2], rawWidths[i3], 0.5);
+
+      const blended = smoothed * 0.6 + cubicSmoothed * 0.4;
+      smoothedWidths.push(Math.max(20, Math.round(blended)));
+    }
+  }
+
   const stripInfos: Array<{ t: number; width: number; centerX: number }> = [];
   let maxStripWidth = 0;
 
   for (let i = 0; i < strips; i++) {
-    const t = i / (strips - 1); // 0 to 1
-    const width = Math.max(20, Math.round(bodyWidthAtT(t, shoulderW, hipW)));
+    const t = i / (strips - 1);
+    const width = smoothedWidths[i];
     const centerX = bodyCenterXAtT(t, shoulderCenterXPx, hipCenterXPx);
     stripInfos.push({ t, width, centerX });
     maxStripWidth = Math.max(maxStripWidth, width);
   }
 
-  // Canvas width: enough to fit the widest strip + any center offset
-  // We compute relative to a common center
   const avgCenterX = (shoulderCenterXPx + hipCenterXPx) / 2;
   let canvasWidth = maxStripWidth;
 
-  // Account for centerline offset — if the body leans, canvas needs extra room
   const maxLeftExtent = Math.max(...stripInfos.map(s => s.width / 2 + Math.abs(s.centerX - avgCenterX)));
   canvasWidth = Math.max(canvasWidth, Math.round(maxLeftExtent * 2));
-  canvasWidth = Math.max(canvasWidth, 60); // minimum
+  canvasWidth = Math.max(canvasWidth, 60);
 
   const canvasHeight = stripHeight * strips;
 
-  // Resize the garment source to match target height for strip extraction
   const garmentScaled = await sharp(garmentBuffer)
     .resize({
-      width: srcW, // keep original width, we'll scale per strip
+      width: srcW,
       height: canvasHeight,
       fit: 'fill',
     })
@@ -204,7 +174,6 @@ export async function warpGarment(
     .png()
     .toBuffer();
 
-  // Process each strip: extract, resize width, position on canvas
   const stripLayers: Array<{ input: Buffer; left: number; top: number }> = [];
   const stripDebug: Array<{ y: number; width: number; offsetX: number }> = [];
 
@@ -215,23 +184,31 @@ export async function warpGarment(
 
     const info = stripInfos[i];
 
-    // Extract the horizontal strip from the source garment
+    const overlapTop = Math.max(0, srcStripTop - 1);
+    const overlapHeight = Math.min(srcStripHeight + 2, canvasHeight - overlapTop);
+
     const strip = await sharp(garmentScaled)
       .extract({
         left: 0,
-        top: srcStripTop,
+        top: overlapTop,
         width: srcW,
-        height: srcStripHeight,
+        height: overlapHeight,
       })
       .resize({
         width: info.width,
-        height: srcStripHeight,
+        height: overlapHeight,
         fit: 'fill',
+        kernel: 'lanczos3',
+      })
+      .extract({
+        left: 0,
+        top: srcStripTop - overlapTop,
+        width: info.width,
+        height: srcStripHeight,
       })
       .png()
       .toBuffer();
 
-    // Position: center the strip relative to the canvas center
     const canvasCenterX = Math.round(canvasWidth / 2);
     const centerOffset = Math.round(info.centerX - avgCenterX);
     const left = Math.max(0, Math.min(canvasWidth - info.width, canvasCenterX - Math.round(info.width / 2) + centerOffset));
@@ -249,7 +226,6 @@ export async function warpGarment(
     });
   }
 
-  // Assemble all strips onto a transparent canvas
   const warped = await sharp({
     create: {
       width: canvasWidth,
@@ -273,5 +249,6 @@ export async function warpGarment(
     canvasHeight,
     strips: stripDebug,
     method: 'section-geometric-warp',
+    stripCount: strips,
   };
 }

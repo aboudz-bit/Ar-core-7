@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     const bodyLandmarksRaw = formData.get('bodyLandmarks') as string | null;
     const garmentCategory = formData.get('garmentCategory') as string | null;
     const fitType = formData.get('fitType') as string | null;
+    const drapeFactorRaw = formData.get('drapeFactor') as string | null;
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'companyId is required' }, { status: 400 });
@@ -90,6 +91,9 @@ export async function POST(req: NextRequest) {
 
     const validCategories = ['t-shirt', 'shirt', 'jacket', 'hoodie', 'sweater', 'thobe', 'abaya', 'dress', 'polo', 'other'];
     const validFitTypes = ['slim', 'regular', 'oversized', 'loose'];
+    const parsedDrapeFactor = drapeFactorRaw ? parseFloat(drapeFactorRaw) : undefined;
+    const drapeFactor = parsedDrapeFactor && !isNaN(parsedDrapeFactor) && parsedDrapeFactor >= 0.5 && parsedDrapeFactor <= 2.0
+      ? parsedDrapeFactor : undefined;
 
     const job = await createTryOnJob({
       companyId,
@@ -100,6 +104,7 @@ export async function POST(req: NextRequest) {
       bodyLandmarks,
       garmentCategory: garmentCategory && validCategories.includes(garmentCategory) ? garmentCategory : undefined,
       fitType: fitType && validFitTypes.includes(fitType) ? fitType : undefined,
+      drapeFactor,
     });
 
     return NextResponse.json({ success: true, data: { id: job.id, status: job.status } }, { status: 201 });

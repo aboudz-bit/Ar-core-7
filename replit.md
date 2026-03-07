@@ -12,6 +12,8 @@ AR-Core-7 is a full-stack Next.js 14 platform for managing AR (Augmented Reality
 - **3D/AR**: Three.js, @google/model-viewer
 - **Image Processing**: sharp (compositing for virtual fit)
 - **Face/Body Tracking**: MediaPipe Face Mesh + Pose (CDN-loaded)
+- **Body Segmentation**: TensorFlow.js BodyPix (server-side, MobileNetV1)
+- **Warp Engine**: Modular interface — GeometricWarpEngine (24-strip), MLWarpEngine placeholder
 
 ## Project Structure
 ```
@@ -26,6 +28,11 @@ src/
     demo/                - Demo pages
   components/            - Shared UI components
   lib/                   - Utility libraries (prisma client, auth helpers)
+  services/
+    segmentation/        - BodyPix body segmentation (body-segmentation.ts)
+    size-recommendation/ - Category-specific size engine (size-engine.ts)
+    virtual-tryon/       - Try-on pipeline (clothing-tryon.ts, cloth-warp.ts, body-mask.ts, warp-engine.ts)
+    body/                - Body measurements from landmarks (body-measurements.ts)
   middleware.ts          - Auth middleware
   types/                 - TypeScript type definitions
 prisma/
@@ -55,24 +62,54 @@ prisma/
 - Seed script: `prisma/seed-tryon.ts`
 - Face overlay asset: `public/demo-assets/aviator-glasses.png` (seeded as FACE_OVERLAY_IMAGE)
 
-## Virtual Fit API
-- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage + optional bodyLandmarks JSON + garmentCategory + fitType (multipart)
-- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath + metadata (clothWarp, occlusionMask, sizeRecommendation, etc.)
+## Virtual Fit Pipeline
+- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage + bodyLandmarks + garmentCategory + fitType + drapeFactor (multipart)
+- Public API: `GET /api/public/tryon-jobs/[id]` — returns full metadata (see below)
 - Auth API: `POST /api/tryon-jobs` — same but requires session auth
-- Client: VirtualFitClient detects body pose from uploaded photo via MediaPipe Pose (CDN), sends 33 landmarks as JSON
-- Processing pipeline: landmarks → computeBodyMeasurements() → warpGarment() (12-strip cloth deformation) + generateOcclusionMask() (head/arms layering) + recommendSize(category, fitType)
-- Fallback (no landmarks): flat sharp.resize() with proportional placement
-- Output: `/public/uploads/tryon-output/tryon_{jobId}_{timestamp}.png`
-- Service: `src/services/virtual-tryon/clothing-tryon.ts`
+- Client: VirtualFitClient detects pose via MediaPipe Pose (CDN), sends 33 landmarks as JSON
+
+### Processing Layers
+1. **Layer 1 (Base)**: Person image
+2. **Layer 2 (Garment)**: Warped garment via WarpEngine (24-strip geometric deformation with drapeFactor, shoulder/waist/hip curvature)
+3. **Layer 3 (Occlusion)**: BodyPix segmentation mask (arms/head over garment) — falls back to landmark polygon masking if BodyPix unavailable
+
+### Services
+- `src/services/segmentation/body-segmentation.ts` — BodyPix (TensorFlow.js, MobileNetV1, server-side), produces part masks (torso/leftArm/rightArm/head). Graceful fallback if TF fails.
+- `src/services/virtual-tryon/cloth-warp.ts` — 24-strip geometric warp with shoulder bulge, waist taper (Gaussian), cubic interpolation, body centerline curvature, drapeFactor support, lanczos3 kernel
+- `src/services/virtual-tryon/warp-engine.ts` — WarpEngine interface. GeometricWarpEngine (active), MLWarpEngine (VITON-HD placeholder)
+- `src/services/virtual-tryon/body-mask.ts` — Landmark-polygon occlusion masking (fallback for segmentation)
+- `src/services/virtual-tryon/clothing-tryon.ts` — Main pipeline orchestrator
 
 ## Size Recommendation Engine
 - Service: `src/services/size-recommendation/size-engine.ts`
 - Category-specific default size charts: thobe (52–64 numeric), abaya (50–60 numeric), t-shirt/shirt/polo (XS–XXXL letter), jacket/hoodie/sweater (XS–XXXL letter)
-- Category-aware scoring weights (e.g., thobe prioritizes height/length, abaya prioritizes drape length)
+- Category-aware scoring weights (thobe prioritizes height/length, abaya prioritizes drape length)
 - Fit types: slim, regular, loose, oversized
 - Sizing systems: letter, numeric, custom
 - Full pipeline: API route parses garmentCategory + fitType → createTryOnJob stores in metadata → processTryOnJob reads and passes to recommendSize()
-- VirtualFitClient has category and fit type dropdowns with contextual sizing hints
+- VirtualFitClient has category/fit type dropdowns + drapeFactor slider with contextual sizing hints
+
+## API Metadata Response
+The GET response for a completed job includes:
+```json
+{
+  "processingTime": 4182,
+  "method": "sharp-composite",
+  "placementMethod": "body-measurements+profile",
+  "clothWarp": true,
+  "occlusionMask": true,
+  "segmentationUsed": true,
+  "warpEngine": "geometric",
+  "drapeFactor": 1.1,
+  "sizeRecommendation": { ... },
+  "shoulderWidthPx": 96,
+  "torsoHeightPx": 180,
+  "confidence": 0.99
+}
+```
+
+## Next.js Config
+- `next.config.mjs` — externalized packages: @prisma/client, bcryptjs, @tensorflow/tfjs-node, @tensorflow-models/body-pix, @tensorflow/tfjs (required to avoid webpack parse errors)
 
 ## Database
 - PostgreSQL via Replit's built-in database

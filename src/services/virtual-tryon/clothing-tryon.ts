@@ -1,20 +1,11 @@
-/**
- * Clothing Try-On Service (Photo-based)
- *
- * Handles the async processing pipeline for photo-based virtual try-on.
- * User uploads a person photo + garment image, system generates a composited preview.
- *
- * Current implementation: Canvas-based image compositing (garment overlaid on person).
- * Production upgrade path: VITON-HD, Fashn, or similar ML-based try-on API.
- */
-
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
 import { computeBodyMeasurements, enhanceWithProfile, type BodyProfile } from '@/services/body/body-measurements';
 import { generateOcclusionMask, renderOcclusionSVG } from './body-mask';
-import { warpGarment } from './cloth-warp';
+import { getWarpEngine } from './warp-engine';
 import { recommendSize, type SizeRecommendation } from '@/services/size-recommendation/size-engine';
+import { segmentBody, isSegmentationResult } from '@/services/segmentation/body-segmentation';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -24,14 +15,11 @@ export interface CreateTryOnJobInput {
   personImagePath: string;
   garmentImagePath: string;
   provider?: string;
-  /** Optional body landmarks (normalized 0–1) for measurement-based placement */
   bodyLandmarks?: Array<{ x: number; y: number; z: number; visibility: number }>;
-  /** Optional user-provided body profile for enhanced fitting */
   bodyProfile?: BodyProfile;
-  /** Optional garment category for category-specific sizing */
   garmentCategory?: string;
-  /** Optional fit type */
   fitType?: string;
+  drapeFactor?: number;
 }
 
 export interface TryOnJobResult {
@@ -51,12 +39,13 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
       garmentImagePath: input.garmentImagePath,
       provider: input.provider || 'internal',
       status: 'UPLOADED',
-      metadata: (input.bodyLandmarks || input.bodyProfile || input.garmentCategory || input.fitType)
+      metadata: (input.bodyLandmarks || input.bodyProfile || input.garmentCategory || input.fitType || input.drapeFactor !== undefined)
         ? JSON.parse(JSON.stringify({
             ...(input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : {}),
             ...(input.bodyProfile ? { bodyProfile: input.bodyProfile } : {}),
             ...(input.garmentCategory ? { garmentCategory: input.garmentCategory } : {}),
             ...(input.fitType ? { fitType: input.fitType } : {}),
+            ...(input.drapeFactor !== undefined ? { drapeFactor: input.drapeFactor } : {}),
           }))
         : undefined,
     },
@@ -104,23 +93,20 @@ async function processTryOnJob(jobId: string) {
     const pW = Math.max(personMeta.width || 800, 100);
     const pH = Math.max(personMeta.height || 1000, 100);
 
-    // Try measurement-based placement if landmarks are stored in metadata
     const meta = job.metadata as Record<string, unknown> | null;
     const storedLandmarks = meta?.bodyLandmarks as
       Array<{ x: number; y: number; z: number; visibility: number }> | undefined;
     const storedProfile = meta?.bodyProfile as BodyProfile | undefined;
+    const drapeFactor = typeof meta?.drapeFactor === 'number' ? meta.drapeFactor : 1.0;
 
     let baseMeasurements = storedLandmarks
       ? computeBodyMeasurements(storedLandmarks, pW, pH)
       : null;
 
-    // Enhance with user profile (height/weight) if available
     const bodyMeasurements = baseMeasurements && storedProfile
       ? enhanceWithProfile(baseMeasurements, storedProfile, pH)
       : baseMeasurements;
 
-    // If we only have a profile (no landmarks), use height/weight to
-    // estimate proportional placement better than pure fixed fallback.
     let profileOnlyFactor = 1.0;
     if (!bodyMeasurements && storedProfile) {
       const heightM = storedProfile.heightCm / 100;
@@ -138,15 +124,12 @@ async function processTryOnJob(jobId: string) {
     let placementMethod: string;
 
     if (bodyMeasurements) {
-      // SMART PLACEMENT: scale and position based on body measurements
-      // (already adjusted by bodyBuildFactor if profile was provided)
       garmentW = Math.max(Math.round(bodyMeasurements.shoulderWidthPx * 1.2), 60);
       garmentH = Math.max(Math.round(bodyMeasurements.torsoHeightPx * 1.3), 35);
       overlayLeft = Math.round(bodyMeasurements.chestCenterXPx - garmentW / 2);
       overlayTop = Math.round(bodyMeasurements.chestCenterYPx + bodyMeasurements.torsoHeightPx * 0.35 - garmentH / 2);
       placementMethod = storedProfile ? 'body-measurements+profile' : 'body-measurements';
     } else {
-      // FALLBACK: fixed proportional placement, adjusted by profile if available
       garmentW = Math.max(Math.round(pW * 0.6 * profileOnlyFactor), 60);
       garmentH = Math.max(Math.round(pH * 0.35), 35);
       overlayLeft = Math.round((pW - garmentW) / 2);
@@ -154,42 +137,39 @@ async function processTryOnJob(jobId: string) {
       placementMethod = storedProfile ? 'fixed-proportional+profile' : 'fixed-proportional';
     }
 
-    // Clamp to image bounds
     overlayLeft = Math.max(0, Math.min(overlayLeft, pW - garmentW));
     overlayTop = Math.max(0, Math.min(overlayTop, pH - garmentH));
 
-    // --- CLOTH WARPING ---
-    // If we have landmarks + measurements, warp the garment to follow body contour.
-    // Otherwise, fall back to flat rectangular resize.
     let garmentResized: Buffer = Buffer.alloc(0);
     let warpApplied = false;
+    let warpEngineName = 'none';
 
     if (bodyMeasurements && storedLandmarks && storedLandmarks.length >= 25) {
       try {
-        const warpResult = await warpGarment(
-          await sharp(job.garmentImagePath).png().toBuffer(),
-          {
-            measurements: bodyMeasurements,
-            landmarks: storedLandmarks,
-            targetHeight: garmentH,
-            imageWidth: pW,
-            imageHeight: pH,
-            stripCount: 12,
-          },
-        );
+        const engine = getWarpEngine('geometric');
+        const garmentBuf = await sharp(job.garmentImagePath).png().toBuffer();
+
+        const warpResult = await engine.warp({
+          personImageBuffer: await sharp(job.personImagePath).png().toBuffer(),
+          garmentImageBuffer: garmentBuf,
+          landmarks: storedLandmarks,
+          measurements: bodyMeasurements,
+          targetHeight: garmentH,
+          imageWidth: pW,
+          imageHeight: pH,
+          drapeFactor,
+        });
 
         garmentResized = warpResult.buffer;
-        // Update dimensions to match the warped output
         garmentW = warpResult.canvasWidth;
         garmentH = warpResult.canvasHeight;
-        // Re-center the garment overlay based on warped width
         overlayLeft = Math.round(bodyMeasurements.chestCenterXPx - garmentW / 2);
         overlayLeft = Math.max(0, Math.min(overlayLeft, pW - garmentW));
         overlayTop = Math.max(0, Math.min(overlayTop, pH - garmentH));
         warpApplied = true;
+        warpEngineName = warpResult.engineName;
       } catch (warpErr) {
-        console.warn(`[TryOnJob ${jobId}] Cloth warp failed, falling back to flat resize:`, warpErr);
-        // Fall through to flat resize below
+        console.warn(`[TryOnJob ${jobId}] Warp engine failed, falling back to flat resize:`, warpErr);
       }
     }
 
@@ -216,10 +196,8 @@ async function processTryOnJob(jobId: string) {
     const outputFilePath = path.join(outputDir, outputFileName);
     const publicPath = `/uploads/tryon-output/${outputFileName}`;
 
-    // Build composite layers
     const compositeLayers: Array<{ input: Buffer; left: number; top: number; blend: string }> = [];
 
-    // Layer 1: garment on top of person
     compositeLayers.push({
       input: garmentResized,
       left: overlayLeft,
@@ -227,39 +205,24 @@ async function processTryOnJob(jobId: string) {
       blend: 'over',
     });
 
-    // Layer 2: occlusion mask — body regions (head/neck/arms) ON TOP of garment
-    // This creates the illusion of natural layering.
     let occlusionApplied = false;
+    let segmentationUsed = false;
+
     if (storedLandmarks && storedLandmarks.length >= 23) {
-      const maskResult = generateOcclusionMask(storedLandmarks, pW, pH);
+      const personBuffer = await sharp(job.personImagePath)
+        .resize(pW, pH, { fit: 'fill' })
+        .ensureAlpha()
+        .png()
+        .toBuffer();
 
-      if (maskResult.hasOcclusion) {
+      const segResult = await segmentBody(personBuffer, bodyMeasurements);
+
+      if (isSegmentationResult(segResult)) {
         try {
-          // Render the mask SVG: white = body in front, black = garment visible
-          const svgMask = renderOcclusionSVG(maskResult.occlusionRegions, pW, pH);
-          const svgBuffer = Buffer.from(svgMask);
-
-          // Convert SVG mask to a grayscale alpha channel
-          const maskImage = await sharp(svgBuffer)
-            .resize(pW, pH)
-            .grayscale()
-            .png()
-            .toBuffer();
-
-          // Extract person pixels and apply the mask as alpha:
-          // Only head/neck/arm regions from the original person image survive
-          const personPixels = await sharp(job.personImagePath)
-            .resize(pW, pH, { fit: 'fill' })
-            .ensureAlpha()
-            .png()
-            .toBuffer();
-
-          // Composite: use the mask to cut out only the occlusion regions
-          // from the person image, then layer those on top of the garment
-          const occlusionLayer = await sharp(personPixels)
+          const occlusionLayer = await sharp(personBuffer)
             .composite([{
-              input: maskImage,
-              blend: 'dest-in' as never, // keep person pixels only where mask is white
+              input: segResult.maskBuffer,
+              blend: 'dest-in' as never,
             }])
             .png()
             .toBuffer();
@@ -272,9 +235,45 @@ async function processTryOnJob(jobId: string) {
           });
 
           occlusionApplied = true;
-        } catch (maskErr) {
-          // If masking fails, fall back to simple overlay (no crash)
-          console.warn(`[TryOnJob ${jobId}] Occlusion mask failed, using simple overlay:`, maskErr);
+          segmentationUsed = true;
+        } catch (segErr) {
+          console.warn(`[TryOnJob ${jobId}] Segmentation compositing failed, trying landmark fallback:`, segErr);
+        }
+      }
+
+      if (!segmentationUsed) {
+        const maskResult = generateOcclusionMask(storedLandmarks, pW, pH);
+
+        if (maskResult.hasOcclusion) {
+          try {
+            const svgMask = renderOcclusionSVG(maskResult.occlusionRegions, pW, pH);
+            const svgBuffer = Buffer.from(svgMask);
+
+            const maskImage = await sharp(svgBuffer)
+              .resize(pW, pH)
+              .grayscale()
+              .png()
+              .toBuffer();
+
+            const occlusionLayer = await sharp(personBuffer)
+              .composite([{
+                input: maskImage,
+                blend: 'dest-in' as never,
+              }])
+              .png()
+              .toBuffer();
+
+            compositeLayers.push({
+              input: occlusionLayer,
+              left: 0,
+              top: 0,
+              blend: 'over',
+            });
+
+            occlusionApplied = true;
+          } catch (maskErr) {
+            console.warn(`[TryOnJob ${jobId}] Occlusion mask failed, using simple overlay:`, maskErr);
+          }
         }
       }
     }
@@ -337,13 +336,18 @@ async function processTryOnJob(jobId: string) {
           }),
           clothWarp: warpApplied,
           occlusionMask: occlusionApplied,
+          segmentationUsed,
+          warpEngine: warpEngineName,
+          drapeFactor,
           ...(sizeRecommendation && { sizeRecommendation: JSON.parse(JSON.stringify(sizeRecommendation)) }),
-          note: 'Estimation-based compositing with section-geometric cloth warping and landmark-polygon occlusion masking — not AI deformation or pixel-accurate segmentation. Results are approximate.',
+          note: 'Estimation-based compositing with section-geometric cloth warping, ' +
+            (segmentationUsed ? 'BodyPix segmentation masking' : 'landmark-polygon occlusion masking') +
+            ', and category-aware size recommendation. Results are approximate.',
         },
       },
     });
 
-    console.log(`[TryOnJob ${jobId}] Completed in ${processingTime}ms — output: ${publicPath}`);
+    console.log(`[TryOnJob ${jobId}] Completed in ${processingTime}ms — output: ${publicPath} (segmentation: ${segmentationUsed}, warp: ${warpEngineName})`);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
     console.error(`[TryOnJob ${jobId}] Failed:`, message);

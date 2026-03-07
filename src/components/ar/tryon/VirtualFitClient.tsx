@@ -119,6 +119,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [usualSize, setUsualSize] = useState<string>('');
   const [garmentCategory, setGarmentCategory] = useState<string>('t-shirt');
   const [fitType, setFitType] = useState<string>('regular');
+  const [drapeFactor, setDrapeFactor] = useState<string>('1.0');
   const [detectedLandmarks, setDetectedLandmarks] = useState<PoseLandmark[] | null>(null);
   const [detectingPose, setDetectingPose] = useState(false);
 
@@ -227,6 +228,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       }
       if (garmentCategory) formData.append('garmentCategory', garmentCategory);
       if (fitType) formData.append('fitType', fitType);
+      if (drapeFactor && drapeFactor !== '1.0') formData.append('drapeFactor', drapeFactor);
 
       const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
@@ -247,7 +249,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       setError('Network error. Please try again.');
       setStatus('FAILED');
     }
-  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, garmentCategory, fitType, pollJobStatus]);
+  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, garmentCategory, fitType, drapeFactor, pollJobStatus]);
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -266,6 +268,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     setUsualSize('');
     setGarmentCategory('t-shirt');
     setFitType('regular');
+    setDrapeFactor('1.0');
     setDetectedLandmarks(null);
     setDetectingPose(false);
   }, [garmentOverlays]);
@@ -428,6 +431,27 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
                 <option value="loose">Loose Fit</option>
                 <option value="oversized">Oversized</option>
               </select>
+            </div>
+          </div>
+          <div className="mt-4">
+            <label htmlFor="drapeFactor" className="block text-xs font-medium text-surface-600 mb-1">
+              Drape Factor: {drapeFactor}
+            </label>
+            <input
+              id="drapeFactor"
+              data-testid="input-drape-factor"
+              type="range"
+              min="0.7"
+              max="1.5"
+              step="0.05"
+              value={drapeFactor}
+              onChange={(e) => setDrapeFactor(e.target.value)}
+              className="w-full accent-brand-500"
+            />
+            <div className="flex justify-between text-[10px] text-surface-400 mt-0.5">
+              <span>Fitted (0.7)</span>
+              <span>Default (1.0)</span>
+              <span>Flowing (1.5)</span>
             </div>
           </div>
           <p className="text-[11px] text-surface-400 mt-2">
