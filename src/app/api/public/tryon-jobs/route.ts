@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
     const personImageFile = formData.get('personImage') as File | null;
     const garmentImageFile = formData.get('garmentImage') as File | null;
     const garmentImagePath = formData.get('garmentImagePath') as string | null;
+    const heightCmRaw = formData.get('heightCm') as string | null;
+    const weightKgRaw = formData.get('weightKg') as string | null;
+    const usualSize = formData.get('usualSize') as string | null;
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'companyId is required' }, { status: 400 });
@@ -63,11 +66,19 @@ export async function POST(req: NextRequest) {
       resolvedGarmentPath = path.join(process.cwd(), 'public', safePath);
     }
 
+    // Build optional body profile from user inputs
+    const heightCm = heightCmRaw ? parseFloat(heightCmRaw) : null;
+    const weightKg = weightKgRaw ? parseFloat(weightKgRaw) : null;
+    const bodyProfile = heightCm && weightKg && heightCm > 50 && heightCm < 300 && weightKg > 20 && weightKg < 500
+      ? { heightCm, weightKg, ...(usualSize ? { usualSize } : {}) }
+      : undefined;
+
     const job = await createTryOnJob({
       companyId,
       experienceId: experienceId || undefined,
       personImagePath: personFilePath,
       garmentImagePath: resolvedGarmentPath,
+      bodyProfile,
     });
 
     return NextResponse.json({ success: true, data: { id: job.id, status: job.status } }, { status: 201 });

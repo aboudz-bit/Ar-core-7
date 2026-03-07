@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Upload, Loader2, CheckCircle, XCircle, ImageIcon, Shirt, ArrowRight, RotateCcw } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, XCircle, ImageIcon, Shirt, ArrowRight, RotateCcw, Ruler } from 'lucide-react';
 
 interface VirtualFitClientProps {
   experience: {
@@ -42,6 +42,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [status, setStatus] = useState<JobStatus>('idle');
   const [outputImage, setOutputImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [heightCm, setHeightCm] = useState<string>('');
+  const [weightKg, setWeightKg] = useState<string>('');
+  const [usualSize, setUsualSize] = useState<string>('');
 
   const personInputRef = useRef<HTMLInputElement>(null);
   const garmentInputRef = useRef<HTMLInputElement>(null);
@@ -119,6 +122,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       }
       formData.append('companyId', company.id);
       formData.append('experienceId', experience.id);
+      if (heightCm) formData.append('heightCm', heightCm);
+      if (weightKg) formData.append('weightKg', weightKg);
+      if (usualSize) formData.append('usualSize', usualSize);
 
       const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
@@ -139,7 +145,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       setError('Network error. Please try again.');
       setStatus('FAILED');
     }
-  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, pollJobStatus]);
+  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, pollJobStatus]);
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -152,6 +158,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     setStatus('idle');
     setOutputImage(null);
     setError(null);
+    setHeightCm('');
+    setWeightKg('');
+    setUsualSize('');
   }, [garmentOverlays]);
 
   const garmentSrc = garmentPreview || selectedGarmentOverlay;
@@ -251,6 +260,57 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
           </div>
         </div>
 
+        {/* Body profile inputs */}
+        <div className="bg-white rounded-xl border border-surface-200 p-5 mb-8">
+          <h3 className="text-sm font-semibold text-surface-700 mb-1 flex items-center gap-2">
+            <Ruler className="w-4 h-4" /> Body Profile <span className="text-xs font-normal text-surface-400">(optional — improves fit accuracy)</span>
+          </h3>
+          <p className="text-[11px] text-surface-400 mb-4">
+            Providing your height and weight helps the system estimate better garment sizing. This is an approximation, not an exact measurement.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="heightCm" className="block text-xs font-medium text-surface-600 mb-1">Height (cm)</label>
+              <input
+                id="heightCm"
+                type="number"
+                min="50"
+                max="300"
+                step="1"
+                placeholder="e.g. 175"
+                value={heightCm}
+                onChange={(e) => setHeightCm(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm text-surface-800 placeholder:text-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label htmlFor="weightKg" className="block text-xs font-medium text-surface-600 mb-1">Weight (kg)</label>
+              <input
+                id="weightKg"
+                type="number"
+                min="20"
+                max="500"
+                step="0.5"
+                placeholder="e.g. 70"
+                value={weightKg}
+                onChange={(e) => setWeightKg(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm text-surface-800 placeholder:text-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label htmlFor="usualSize" className="block text-xs font-medium text-surface-600 mb-1">Usual Size</label>
+              <input
+                id="usualSize"
+                type="text"
+                placeholder="e.g. M, L, 42"
+                value={usualSize}
+                onChange={(e) => setUsualSize(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-surface-300 text-sm text-surface-800 placeholder:text-surface-300 focus:outline-none focus:ring-2 focus:ring-brand-400 focus:border-transparent"
+              />
+            </div>
+          </div>
+        </div>
+
         {/* Action button */}
         <div className="flex items-center justify-center gap-4 mb-8">
           <button
@@ -296,7 +356,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               className="max-w-lg mx-auto rounded-lg shadow-lg"
             />
             <p className="text-xs text-surface-400 mt-4">
-              This is a photo-based preview. Results may vary from actual product fit.
+              This is an estimation-based preview. Sizing is approximate and may vary from actual product fit.
             </p>
           </div>
         )}

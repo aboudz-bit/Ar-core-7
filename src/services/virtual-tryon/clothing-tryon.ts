@@ -11,7 +11,7 @@
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
-import { computeBodyMeasurements, type BodyMeasurements } from '@/services/body/body-measurements';
+import { computeBodyMeasurements, enhanceWithProfile, type BodyProfile } from '@/services/body/body-measurements';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -23,6 +23,8 @@ export interface CreateTryOnJobInput {
   provider?: string;
   /** Optional body landmarks (normalized 0–1) for measurement-based placement */
   bodyLandmarks?: Array<{ x: number; y: number; z: number; visibility: number }>;
+  /** Optional user-provided body profile for enhanced fitting */
+  bodyProfile?: BodyProfile;
 }
 
 export interface TryOnJobResult {
@@ -42,7 +44,12 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
       garmentImagePath: input.garmentImagePath,
       provider: input.provider || 'internal',
       status: 'UPLOADED',
-      metadata: input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : undefined,
+      metadata: (input.bodyLandmarks || input.bodyProfile)
+        ? JSON.parse(JSON.stringify({
+            ...(input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : {}),
+            ...(input.bodyProfile ? { bodyProfile: input.bodyProfile } : {}),
+          }))
+        : undefined,
     },
   });
 
@@ -89,30 +96,53 @@ async function processTryOnJob(jobId: string) {
     const pH = Math.max(personMeta.height || 1000, 100);
 
     // Try measurement-based placement if landmarks are stored in metadata
-    const storedLandmarks = (job.metadata as Record<string, unknown> | null)?.bodyLandmarks as
+    const meta = job.metadata as Record<string, unknown> | null;
+    const storedLandmarks = meta?.bodyLandmarks as
       Array<{ x: number; y: number; z: number; visibility: number }> | undefined;
+    const storedProfile = meta?.bodyProfile as BodyProfile | undefined;
 
-    const bodyMeasurements = storedLandmarks
+    let baseMeasurements = storedLandmarks
       ? computeBodyMeasurements(storedLandmarks, pW, pH)
       : null;
+
+    // Enhance with user profile (height/weight) if available
+    const bodyMeasurements = baseMeasurements && storedProfile
+      ? enhanceWithProfile(baseMeasurements, storedProfile, pH)
+      : baseMeasurements;
+
+    // If we only have a profile (no landmarks), use height/weight to
+    // estimate proportional placement better than pure fixed fallback.
+    let profileOnlyFactor = 1.0;
+    if (!bodyMeasurements && storedProfile) {
+      const heightM = storedProfile.heightCm / 100;
+      const bmi = storedProfile.weightKg / (heightM * heightM);
+      if (bmi < 18.5) profileOnlyFactor = 0.90;
+      else if (bmi < 25) profileOnlyFactor = 1.0;
+      else if (bmi < 30) profileOnlyFactor = 1.08;
+      else profileOnlyFactor = 1.15;
+    }
 
     let garmentW: number;
     let garmentH: number;
     let overlayLeft: number;
     let overlayTop: number;
+    let placementMethod: string;
 
     if (bodyMeasurements) {
       // SMART PLACEMENT: scale and position based on body measurements
+      // (already adjusted by bodyBuildFactor if profile was provided)
       garmentW = Math.max(Math.round(bodyMeasurements.shoulderWidthPx * 1.2), 60);
       garmentH = Math.max(Math.round(bodyMeasurements.torsoHeightPx * 1.3), 35);
       overlayLeft = Math.round(bodyMeasurements.chestCenterXPx - garmentW / 2);
       overlayTop = Math.round(bodyMeasurements.chestCenterYPx + bodyMeasurements.torsoHeightPx * 0.35 - garmentH / 2);
+      placementMethod = storedProfile ? 'body-measurements+profile' : 'body-measurements';
     } else {
-      // FALLBACK: fixed proportional placement (original behavior)
-      garmentW = Math.max(Math.round(pW * 0.6), 60);
+      // FALLBACK: fixed proportional placement, adjusted by profile if available
+      garmentW = Math.max(Math.round(pW * 0.6 * profileOnlyFactor), 60);
       garmentH = Math.max(Math.round(pH * 0.35), 35);
       overlayLeft = Math.round((pW - garmentW) / 2);
       overlayTop = Math.round(pH * 0.25);
+      placementMethod = storedProfile ? 'fixed-proportional+profile' : 'fixed-proportional';
     }
 
     // Clamp to image bounds
@@ -164,15 +194,18 @@ async function processTryOnJob(jobId: string) {
           outputWidth: pW,
           outputHeight: pH,
           method: 'sharp-composite',
-          placementMethod: bodyMeasurements ? 'body-measurements' : 'fixed-proportional',
+          placementMethod,
           ...(bodyMeasurements && {
             shoulderWidthPx: bodyMeasurements.shoulderWidthPx,
             torsoHeightPx: bodyMeasurements.torsoHeightPx,
             confidence: bodyMeasurements.confidence,
           }),
-          note: bodyMeasurements
-            ? 'Garment placed using body measurement landmarks for adaptive sizing and positioning.'
-            : 'Image compositing overlay — not AI-based virtual try-on. Garment is overlaid on person photo.',
+          ...(storedProfile && {
+            profileHeightCm: storedProfile.heightCm,
+            profileWeightKg: storedProfile.weightKg,
+            profileUsualSize: storedProfile.usualSize || null,
+          }),
+          note: 'Estimation-based compositing overlay — not medically precise or tailor-grade. Results are approximate.',
         },
       },
     });

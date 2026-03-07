@@ -135,3 +135,96 @@ export function computeBodyMeasurements(
     confidence,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Body Profile — user-provided inputs for enhanced fitting
+// ---------------------------------------------------------------------------
+
+export interface BodyProfile {
+  /** User height in centimeters */
+  heightCm: number;
+  /** User weight in kilograms */
+  weightKg: number;
+  /** Optional usual clothing size label (e.g. "M", "L", "42") */
+  usualSize?: string;
+}
+
+export interface EnhancedBodyMeasurements extends BodyMeasurements {
+  /** Estimated real-world shoulder width in cm (approximate) */
+  shoulderWidthCm: number;
+  /** Estimated real-world hip width in cm (approximate) */
+  hipWidthCm: number;
+  /** Estimated real-world torso height in cm (approximate) */
+  torsoHeightCm: number;
+  /** Scale multiplier derived from BMI-range heuristics */
+  bodyBuildFactor: number;
+  /** The profile that was used */
+  profile: BodyProfile;
+}
+
+/**
+ * Combine camera-based body measurements with user-provided height/weight
+ * to produce enhanced, scale-aware measurements.
+ *
+ * IMPORTANT: This is an estimation system using statistical averages.
+ * It does NOT provide medically accurate or tailor-grade measurements.
+ *
+ * How it works:
+ * 1. Camera landmarks give us proportional ratios (e.g. shoulder-to-hip ratio).
+ * 2. User height gives us a real-world reference to convert pixel ratios → cm.
+ * 3. User weight (via BMI) gives us a body-build factor that adjusts width
+ *    estimates, since a heavier person at the same height has wider proportions.
+ */
+export function enhanceWithProfile(
+  measurements: BodyMeasurements,
+  profile: BodyProfile,
+  canvasHeight: number,
+): EnhancedBodyMeasurements {
+  // The full body in the camera frame occupies some fraction of canvas height.
+  // We use torso as ~30% of total height (anatomical average) to derive a
+  // pixel-per-cm factor from the user's stated height.
+  const estimatedTorsoRealCm = profile.heightCm * 0.30;
+  const pixelsPerCm = measurements.torsoHeightPx / estimatedTorsoRealCm;
+
+  // BMI-based body build factor:
+  //   BMI < 18.5 → slim (0.90)
+  //   BMI 18.5–25 → average (1.0)
+  //   BMI 25–30 → broad (1.08)
+  //   BMI > 30 → wider (1.15)
+  // This is a rough heuristic, not a precise model.
+  const heightM = profile.heightCm / 100;
+  const bmi = profile.weightKg / (heightM * heightM);
+  let bodyBuildFactor: number;
+  if (bmi < 18.5) {
+    bodyBuildFactor = 0.90;
+  } else if (bmi < 25) {
+    bodyBuildFactor = 1.0;
+  } else if (bmi < 30) {
+    bodyBuildFactor = 1.08;
+  } else {
+    bodyBuildFactor = 1.15;
+  }
+
+  // Convert pixel measurements → approximate cm using the derived scale
+  const shoulderWidthCm = pixelsPerCm > 0
+    ? (measurements.shoulderWidthPx / pixelsPerCm) * bodyBuildFactor
+    : profile.heightCm * 0.25 * bodyBuildFactor; // fallback: ~25% of height
+
+  const hipWidthCm = pixelsPerCm > 0
+    ? (measurements.hipWidthPx / pixelsPerCm) * bodyBuildFactor
+    : profile.heightCm * 0.18 * bodyBuildFactor;
+
+  const torsoHeightCm = estimatedTorsoRealCm;
+
+  return {
+    ...measurements,
+    // Adjust pixel values by body build factor (wider/narrower garment)
+    shoulderWidthPx: measurements.shoulderWidthPx * bodyBuildFactor,
+    hipWidthPx: measurements.hipWidthPx * bodyBuildFactor,
+    shoulderWidthCm,
+    hipWidthCm,
+    torsoHeightCm,
+    bodyBuildFactor,
+    profile,
+  };
+}
