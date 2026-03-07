@@ -1,7 +1,72 @@
 'use client';
 
 import { useState, useRef, useCallback } from 'react';
-import { Upload, Loader2, CheckCircle, XCircle, ImageIcon, Shirt, ArrowRight, RotateCcw, Ruler } from 'lucide-react';
+import { Upload, Loader2, CheckCircle, XCircle, ImageIcon, Shirt, ArrowRight, RotateCcw, Ruler, Scan } from 'lucide-react';
+import { loadPoseLib } from '@/lib/mediapipe-loader';
+
+type PoseLandmark = { x: number; y: number; z: number; visibility: number };
+
+async function detectPoseFromImage(imageFile: File): Promise<PoseLandmark[] | null> {
+  return new Promise(async (resolve) => {
+    try {
+      const PoseClass = await loadPoseLib();
+
+      const pose = new PoseClass({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      let resolved = false;
+      pose.onResults((results) => {
+        if (resolved) return;
+        resolved = true;
+        if (results.poseLandmarks && results.poseLandmarks.length >= 25) {
+          resolve(results.poseLandmarks);
+        } else {
+          resolve(null);
+        }
+        pose.close();
+      });
+
+      await pose.initialize();
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      const objectUrl = URL.createObjectURL(imageFile);
+      img.onload = async () => {
+        URL.revokeObjectURL(objectUrl);
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(null); pose.close(); return; }
+        ctx.drawImage(img, 0, 0);
+
+        try {
+          await pose.send({ image: canvas });
+        } catch {
+          if (!resolved) { resolved = true; resolve(null); pose.close(); }
+        }
+
+        setTimeout(() => {
+          if (!resolved) { resolved = true; resolve(null); pose.close(); }
+        }, 10000);
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); pose.close(); };
+      img.src = objectUrl;
+    } catch (err) {
+      console.error('[VirtualFit] Pose detection failed:', err);
+      resolve(null);
+    }
+  });
+}
 
 interface VirtualFitClientProps {
   experience: {
@@ -52,18 +117,36 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [heightCm, setHeightCm] = useState<string>('');
   const [weightKg, setWeightKg] = useState<string>('');
   const [usualSize, setUsualSize] = useState<string>('');
+  const [detectedLandmarks, setDetectedLandmarks] = useState<PoseLandmark[] | null>(null);
+  const [detectingPose, setDetectingPose] = useState(false);
 
   const personInputRef = useRef<HTMLInputElement>(null);
   const garmentInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const handlePersonSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePersonSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setPersonImage(file);
     setPersonPreview(URL.createObjectURL(file));
     setOutputImage(null);
     setError(null);
+    setDetectedLandmarks(null);
+
+    setDetectingPose(true);
+    try {
+      const landmarks = await detectPoseFromImage(file);
+      setDetectedLandmarks(landmarks);
+      if (landmarks) {
+        console.log(`[VirtualFit] Detected ${landmarks.length} body landmarks from photo`);
+      } else {
+        console.log('[VirtualFit] No body detected in photo — will use fallback placement');
+      }
+    } catch (err) {
+      console.warn('[VirtualFit] Pose detection error:', err);
+    } finally {
+      setDetectingPose(false);
+    }
   }, []);
 
   const handleGarmentSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,6 +220,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       if (heightCm) formData.append('heightCm', heightCm);
       if (weightKg) formData.append('weightKg', weightKg);
       if (usualSize) formData.append('usualSize', usualSize);
+      if (detectedLandmarks) {
+        formData.append('bodyLandmarks', JSON.stringify(detectedLandmarks));
+      }
 
       const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
@@ -157,7 +243,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       setError('Network error. Please try again.');
       setStatus('FAILED');
     }
-  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, pollJobStatus]);
+  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, pollJobStatus]);
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -174,6 +260,8 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     setHeightCm('');
     setWeightKg('');
     setUsualSize('');
+    setDetectedLandmarks(null);
+    setDetectingPose(false);
   }, [garmentOverlays]);
 
   const garmentSrc = garmentPreview || selectedGarmentOverlay;
@@ -228,6 +316,26 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               )}
             </div>
             <input ref={personInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePersonSelect} />
+            {personPreview && (
+              <div className="mt-2 flex items-center gap-2 text-xs">
+                {detectingPose ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-500" />
+                    <span className="text-surface-500">Detecting body pose...</span>
+                  </>
+                ) : detectedLandmarks ? (
+                  <>
+                    <Scan className="w-3.5 h-3.5 text-emerald-500" />
+                    <span data-testid="text-landmarks-detected" className="text-emerald-600">{detectedLandmarks.length} body landmarks detected — cloth warping enabled</span>
+                  </>
+                ) : (
+                  <>
+                    <Scan className="w-3.5 h-3.5 text-surface-400" />
+                    <span data-testid="text-no-landmarks" className="text-surface-400">No body detected — will use proportional placement</span>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Garment image */}

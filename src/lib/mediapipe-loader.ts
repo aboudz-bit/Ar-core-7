@@ -70,7 +70,7 @@ export async function loadPoseLib(): Promise<
       poseLandmarks?: { x: number; y: number; z: number; visibility: number }[];
       poseWorldLandmarks?: { x: number; y: number; z: number; visibility: number }[];
     }) => void) => void;
-    send: (input: { image: HTMLVideoElement }) => Promise<void>;
+    send: (input: { image: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement }) => Promise<void>;
     initialize: () => Promise<void>;
     close: () => void;
   }

@@ -56,10 +56,12 @@ prisma/
 - Face overlay asset: `public/demo-assets/aviator-glasses.png` (seeded as FACE_OVERLAY_IMAGE)
 
 ## Virtual Fit API
-- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage (multipart), creates compositing job
-- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath
+- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage + optional bodyLandmarks JSON (multipart)
+- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath + metadata (clothWarp, occlusionMask, etc.)
 - Auth API: `POST /api/tryon-jobs` — same but requires session auth
-- Processing: sharp-based image compositing (garment overlaid on person photo, not AI try-on)
+- Client: VirtualFitClient detects body pose from uploaded photo via MediaPipe Pose (CDN), sends 33 landmarks as JSON
+- Processing pipeline: landmarks → computeBodyMeasurements() → warpGarment() (12-strip cloth deformation) + generateOcclusionMask() (head/arms layering) + recommendSize()
+- Fallback (no landmarks): flat sharp.resize() with proportional placement
 - Output: `/public/uploads/tryon-output/tryon_{jobId}_{timestamp}.png`
 - Service: `src/services/virtual-tryon/clothing-tryon.ts`
 

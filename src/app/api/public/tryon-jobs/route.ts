@@ -16,6 +16,7 @@ export async function POST(req: NextRequest) {
     const heightCmRaw = formData.get('heightCm') as string | null;
     const weightKgRaw = formData.get('weightKg') as string | null;
     const usualSize = formData.get('usualSize') as string | null;
+    const bodyLandmarksRaw = formData.get('bodyLandmarks') as string | null;
 
     if (!companyId) {
       return NextResponse.json({ success: false, error: 'companyId is required' }, { status: 400 });
@@ -73,12 +74,25 @@ export async function POST(req: NextRequest) {
       ? { heightCm, weightKg, ...(usualSize ? { usualSize } : {}) }
       : undefined;
 
+    let bodyLandmarks: Array<{ x: number; y: number; z: number; visibility: number }> | undefined;
+    if (bodyLandmarksRaw) {
+      try {
+        const parsed = JSON.parse(bodyLandmarksRaw);
+        if (Array.isArray(parsed) && parsed.length >= 25) {
+          bodyLandmarks = parsed;
+        }
+      } catch {
+        // Invalid JSON — ignore
+      }
+    }
+
     const job = await createTryOnJob({
       companyId,
       experienceId: experienceId || undefined,
       personImagePath: personFilePath,
       garmentImagePath: resolvedGarmentPath,
       bodyProfile,
+      bodyLandmarks,
     });
 
     return NextResponse.json({ success: true, data: { id: job.id, status: job.status } }, { status: 201 });
