@@ -9,7 +9,6 @@ export async function GET(
 ) {
   const slug = params.slug;
 
-  // Find product by generating slug from title, or by matching experience slug
   const products = await prisma.product.findMany({
     where: { status: 'ACTIVE' },
     include: {
@@ -34,12 +33,25 @@ export async function GET(
   }
 
   const glbAsset = product.assets.find((a) => a.assetType === 'MODEL_GLB');
+  const usdzAsset = product.assets.find((a) => a.assetType === 'MODEL_USDZ');
   const posterAsset = product.assets.find((a) => a.assetType === 'POSTER');
+  const thumbnailAsset = product.assets.find((a) => a.assetType === 'THUMBNAIL');
+  const imageAsset = product.assets.find((a) => a.assetType === 'IMAGE_2D');
+
+  const fallbackImage = posterAsset?.filePath
+    || thumbnailAsset?.filePath
+    || imageAsset?.filePath
+    || product.thumbnailUrl
+    || null;
 
   return NextResponse.json({
     name: product.title,
     model: glbAsset ? glbAsset.filePath : null,
+    modelUsdz: usdzAsset ? usdzAsset.filePath : null,
     poster: posterAsset ? posterAsset.filePath : null,
+    image: fallbackImage,
+    hasModel: !!glbAsset || !!usdzAsset,
+    hasImage: !!fallbackImage,
     tracking: 'surface',
     description: product.description,
     company: product.company.name,

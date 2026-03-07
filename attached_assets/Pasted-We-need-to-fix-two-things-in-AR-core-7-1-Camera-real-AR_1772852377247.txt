@@ -1,0 +1,87 @@
+We need to fix two things in AR-core-7:
+
+1) Camera / real AR session is not opening
+2) If a product only has an uploaded IMAGE and no 3D model, the system should still support a fallback AR mode
+
+Right now the current flow opens a 3D viewer, but it does not reliably open the camera or a true AR experience.
+
+Build this properly.
+
+GOAL
+Support 3 product visualization modes:
+
+A) Full Surface AR
+- Use when product has MODEL_GLB or MODEL_USDZ
+- Open camera
+- Start real AR session if supported
+- Place model on surface
+
+B) Image-only AR fallback
+- Use when product has no MODEL_GLB but does have IMAGE_2D / THUMBNAIL / POSTER
+- Open camera
+- Show the uploaded product image as a flat 2D billboard/card in AR
+- Allow scaling and moving on screen
+- This is a fallback so products can still appear in AR without a true 3D model
+
+C) Normal 3D viewer fallback
+- If camera / AR is unsupported, fall back to standard model/image viewer
+
+REQUIREMENTS
+
+1. Detect product asset availability
+For each product, determine:
+- has MODEL_GLB?
+- has MODEL_USDZ?
+- has IMAGE_2D / THUMBNAIL / POSTER?
+
+2. Real AR launch behavior
+When clicking "View in AR":
+- if MODEL_GLB exists -> launch full surface AR
+- else if image exists -> launch image-only AR fallback with camera
+- else show a clear "No AR asset available" message
+
+3. Camera permission
+Make sure the flow explicitly requests camera permission when AR mode starts.
+Do not just open a black overlay.
+
+4. Image-only AR fallback
+Implement a simple camera-based AR-like mode for image assets:
+- open camera stream
+- render uploaded image as a movable/scalable flat overlay card
+- product name shown
+- close button
+- basic controls for size / reset
+
+This is acceptable as a fallback for restaurants that only uploaded product images.
+
+5. Replit / browser compatibility
+If Replit Preview blocks camera/WebXR:
+- detect that clearly
+- show a message:
+  "Open in browser for camera-based AR"
+- make the external browser flow work
+
+6. Product-specific fix
+Verify these products:
+- Wagyu Steak
+- Tomahawk Steak
+- Truffle Burger
+
+For each one:
+- if no real 3D model exists, use the uploaded product image in image-only AR fallback
+- if demo GLB exists, use full AR mode
+
+7. Output format
+Reply with:
+1) what was changed
+2) how camera AR now works
+3) how image-only AR fallback works
+4) exact routes to test
+5) pass/fail for:
+   - Wagyu Steak
+   - Tomahawk Steak
+   - Truffle Burger
+
+Important:
+A plain uploaded image should not be treated as a 3D model.
+But it should still be usable in a camera-based AR fallback mode.
