@@ -1,0 +1,64 @@
+The app is running in Replit, but login is hanging on "Signing in..." and not completing.
+
+Your task:
+Debug and fix the login flow end-to-end in the current Replit environment.
+
+Context:
+- The app loads successfully
+- /login page opens
+- When I try admin@arcore7.com / admin123, the button stays on "Signing in..."
+- I need the login to complete and redirect correctly
+
+Please do this step by step:
+
+1) Verify the backend auth flow
+- inspect POST /api/auth/login
+- verify request reaches the route
+- verify response returns properly
+- verify no infinite pending promise
+- verify cookies/session are set correctly
+
+2) Check database/auth data
+- confirm demo user exists:
+  admin@arcore7.com / admin123
+- verify password hash matches
+- verify seed data is present
+- verify memberships exist for the admin user
+
+3) Check frontend login flow
+- inspect the login form submit handler
+- verify it awaits the API correctly
+- verify loading state resets on success/failure
+- verify redirect logic works after successful login
+- verify there is no silent error swallowed in try/catch
+
+4) Check Replit-specific issues
+- verify cookies work in the Replit preview environment
+- verify secure/sameSite cookie settings are not blocking local preview login
+- if secure cookies block login in dev preview, adjust dev behavior safely
+
+5) Add visible debugging
+- print the exact error cause in console/server logs
+- if login fails, show a clear error message on the UI
+- do not leave the button spinning forever
+
+6) Test exact flow
+- open /login
+- log in with admin@arcore7.com / admin123
+- confirm redirect to /dashboard
+- confirm authenticated pages load properly
+
+7) If needed, fix these likely causes
+- cookie not being set in Replit preview
+- secure cookie misconfiguration in development
+- bad password comparison
+- broken redirect
+- unresolved fetch promise
+- missing membership lookup
+- invalid JWT/session creation
+
+Output format:
+1) root cause
+2) exact files changed
+3) what was fixed
+4) exact test result for admin@arcore7.com
