@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import {
   Sparkles, Plus, Eye, ArrowRight, Smartphone, Target, QrCode, Code,
-  AlertTriangle, CheckCircle, Box, Image as ImageIcon, ScanFace, PersonStanding
+  AlertTriangle, CheckCircle, Box, Image as ImageIcon, ScanFace, PersonStanding, Shirt
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -39,6 +39,7 @@ const TYPE_ICONS: Record<string, typeof Eye> = {
   EMBED_VIEWER: Code,
   FACE_TRYON: ScanFace,
   BODY_TRYON: PersonStanding,
+  CLOTHING_TRYON_PHOTO: Shirt,
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -49,6 +50,7 @@ const TYPE_COLORS: Record<string, string> = {
   EMBED_VIEWER: 'bg-rose-50 text-rose-600',
   FACE_TRYON: 'bg-violet-50 text-violet-600',
   BODY_TRYON: 'bg-fuchsia-50 text-fuchsia-600',
+  CLOTHING_TRYON_PHOTO: 'bg-teal-50 text-teal-600',
 };
 
 const EXPERIENCE_TYPE_REQUIREMENTS: Record<string, { label: string; needs: string[]; description: string }> = {
@@ -81,6 +83,11 @@ const EXPERIENCE_TYPE_REQUIREMENTS: Record<string, { label: string; needs: strin
     label: 'Body Try-On',
     needs: ['BODY_OVERLAY_MODEL'],
     description: 'Virtual try-on using body tracking (clothing, fashion)',
+  },
+  CLOTHING_TRYON_PHOTO: {
+    label: 'Photo Try-On',
+    needs: ['GARMENT_IMAGE'],
+    description: 'Upload person photo + garment for virtual try-on preview',
   },
 };
 

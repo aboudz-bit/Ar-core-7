@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     ...(companyId
       ? { companyId }
       : companyIds ? { companyId: { in: companyIds } } : {}),
-    ...(type ? { experienceType: type as 'PRODUCT_VIEWER' | 'SURFACE_AR' | 'IMAGE_TARGET' | 'QR_LAUNCH' | 'EMBED_VIEWER' | 'FACE_TRYON' | 'BODY_TRYON' } : {}),
+    ...(type ? { experienceType: type as 'PRODUCT_VIEWER' | 'SURFACE_AR' | 'IMAGE_TARGET' | 'QR_LAUNCH' | 'EMBED_VIEWER' | 'FACE_TRYON' | 'BODY_TRYON' | 'CLOTHING_TRYON_PHOTO' } : {}),
     ...(status ? { publishStatus: status as 'DRAFT' | 'READY' | 'PUBLISHED' | 'ARCHIVED' } : {}),
   };
 

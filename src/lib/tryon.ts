@@ -2,7 +2,7 @@ import { prisma } from '@/lib/prisma';
 
 /**
  * Try-on module data types and server-side fetching logic.
- * Handles FACE_TRYON and BODY_TRYON experience types.
+ * Handles FACE_TRYON, BODY_TRYON, and CLOTHING_TRYON_PHOTO experience types.
  */
 
 export interface TryOnOverlay {
@@ -18,7 +18,7 @@ export interface TryOnData {
     id: string;
     name: string;
     slug: string;
-    type: 'FACE_TRYON' | 'BODY_TRYON';
+    type: 'FACE_TRYON' | 'BODY_TRYON' | 'CLOTHING_TRYON_PHOTO';
     scale: number;
     sceneConfig: Record<string, unknown> | null;
     ctaText: string | null;
@@ -62,14 +62,18 @@ export async function getTryOnData(experienceSlug: string): Promise<TryOnData | 
     return null;
   }
 
-  if (experience.experienceType !== 'FACE_TRYON' && experience.experienceType !== 'BODY_TRYON') {
+  const tryOnTypes = ['FACE_TRYON', 'BODY_TRYON', 'CLOTHING_TRYON_PHOTO'];
+  if (!tryOnTypes.includes(experience.experienceType)) {
     return null;
   }
 
   // Filter overlay assets based on experience type
-  const overlayTypes = experience.experienceType === 'FACE_TRYON'
-    ? ['FACE_OVERLAY_MODEL', 'FACE_OVERLAY_IMAGE', 'FACE_EFFECT']
-    : ['BODY_OVERLAY_MODEL', 'BODY_REFERENCE_IMAGE'];
+  const overlayTypeMap: Record<string, string[]> = {
+    FACE_TRYON: ['FACE_OVERLAY_MODEL', 'FACE_OVERLAY_IMAGE', 'FACE_EFFECT'],
+    BODY_TRYON: ['BODY_OVERLAY_MODEL', 'BODY_REFERENCE_IMAGE'],
+    CLOTHING_TRYON_PHOTO: ['GARMENT_IMAGE', 'TRYON_OUTPUT_IMAGE', 'BODY_REFERENCE_IMAGE'],
+  };
+  const overlayTypes = overlayTypeMap[experience.experienceType] || [];
 
   const overlays: TryOnOverlay[] = (experience.product?.assets || [])
     .filter((a) => overlayTypes.includes(a.assetType))
@@ -93,7 +97,7 @@ export async function getTryOnData(experienceSlug: string): Promise<TryOnData | 
       id: experience.id,
       name: experience.name,
       slug: experience.slug,
-      type: experience.experienceType as 'FACE_TRYON' | 'BODY_TRYON',
+      type: experience.experienceType as 'FACE_TRYON' | 'BODY_TRYON' | 'CLOTHING_TRYON_PHOTO',
       scale: experience.scale,
       sceneConfig: experience.sceneConfig as Record<string, unknown> | null,
       ctaText: experience.ctaText,

@@ -18,7 +18,7 @@ interface TryOnClientProps {
     id: string;
     name: string;
     slug: string;
-    type: 'FACE_TRYON' | 'BODY_TRYON';
+    type: string;
     scale: number;
     sceneConfig: Record<string, unknown> | null;
     ctaText: string | null;

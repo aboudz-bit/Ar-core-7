@@ -47,6 +47,7 @@ const EXPERIENCE_TYPE_NEEDS: Record<string, string[]> = {
   EMBED_VIEWER: ['MODEL_GLB'],
   FACE_TRYON: ['FACE_OVERLAY_IMAGE'],
   BODY_TRYON: ['BODY_OVERLAY_MODEL'],
+  CLOTHING_TRYON_PHOTO: ['GARMENT_IMAGE'],
 };
 
 export default function ExperienceDetailPage() {
@@ -113,7 +114,15 @@ export default function ExperienceDetailPage() {
   if (!experience) return <div className="p-6">Experience not found</div>;
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-  const publicUrl = `${appUrl}/ar/${experience.slug}`;
+
+  // Route try-on types to their dedicated routes
+  const typeRouteMap: Record<string, string> = {
+    FACE_TRYON: 'tryon',
+    BODY_TRYON: 'body',
+    CLOTHING_TRYON_PHOTO: 'virtual-fit',
+  };
+  const routePrefix = typeRouteMap[experience.experienceType] || 'ar';
+  const publicUrl = `${appUrl}/${routePrefix}/${experience.slug}`;
   const embedUrl = `${appUrl}/embed/${experience.slug}`;
   const launchUrl = `${appUrl}/launch/${experience.slug}`;
   const viewerUrl = experience.product ? `${appUrl}/viewer/${experience.company.slug}/${experience.product.title.toLowerCase().replace(/\s+/g, '-')}` : null;

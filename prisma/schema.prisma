@@ -39,6 +39,7 @@ enum ExperienceType {
   EMBED_VIEWER
   FACE_TRYON
   BODY_TRYON
+  CLOTHING_TRYON_PHOTO
 }
 
 enum ApiKeyStatus {
@@ -64,6 +65,9 @@ enum AssetType {
   FACE_OVERLAY_IMAGE
   BODY_OVERLAY_MODEL
   BODY_REFERENCE_IMAGE
+  GARMENT_IMAGE
+  TRYON_OUTPUT_IMAGE
+  TRACKING_CONFIG_JSON
 }
 
 model User {
@@ -385,4 +389,25 @@ model ImageTo3DJob {
   @@index([productId])
   @@index([status])
   @@index([companyId])
+}
+
+model TryOnJob {
+  id                String    @id @default(cuid())
+  companyId         String
+  experienceId      String?
+  personImagePath   String    // Path to the uploaded person photo
+  garmentImagePath  String    // Path to the uploaded garment image
+  outputImagePath   String?   // Path to the generated try-on result
+  outputAssetId     String?   // The generated TRYON_OUTPUT_IMAGE asset ID
+  status            String    @default("UPLOADED") // UPLOADED, PROCESSING, COMPLETE, FAILED
+  provider          String    @default("internal") // internal, viton_hd, external_api
+  errorMessage      String?
+  metadata          Json?     // { processingTime, modelUsed, resolution, etc. }
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([experienceId])
+  @@index([status])
 }

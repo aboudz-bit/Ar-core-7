@@ -54,6 +54,26 @@ const nextConfig = {
       ],
     },
     {
+      source: '/tryon/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      ],
+    },
+    {
+      source: '/body/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      ],
+    },
+    {
+      source: '/virtual-fit/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+      ],
+    },
+    {
       source: '/embed/:path*',
       headers: [
         { key: 'X-Frame-Options', value: 'ALLOWALL' },
