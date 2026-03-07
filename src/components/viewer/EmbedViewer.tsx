@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { AlertTriangle, X, Camera, RotateCcw, ZoomIn, ZoomOut, Move } from 'lucide-react';
+import { AlertTriangle, X, Camera, Move } from 'lucide-react';
+
+/** Escape HTML special characters to prevent XSS in dangerouslySetInnerHTML */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 interface Props {
   experience: {
@@ -450,10 +456,10 @@ export function EmbedViewer({ experience, product, company, branding, embed = fa
           dangerouslySetInnerHTML={{
             __html: `
               <model-viewer
-                src="${product!.modelUrl}"
-                ${product!.usdzUrl ? `ios-src="${product!.usdzUrl}"` : ''}
-                ${product!.posterUrl ? `poster="${product!.posterUrl}"` : ''}
-                alt="${product!.title}"
+                src="${escapeHtml(product!.modelUrl!)}"
+                ${product!.usdzUrl ? `ios-src="${escapeHtml(product!.usdzUrl)}"` : ''}
+                ${product!.posterUrl ? `poster="${escapeHtml(product!.posterUrl)}"` : ''}
+                alt="${escapeHtml(product!.title)}"
                 camera-controls
                 auto-rotate
                 ar

@@ -3,6 +3,12 @@
 import { useEffect, useState } from 'react';
 import { Box, Smartphone, Camera, AlertTriangle, ExternalLink, ImageIcon, Loader2 } from 'lucide-react';
 
+/** Escape HTML special characters to prevent XSS in dangerouslySetInnerHTML */
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 interface Props {
   experience: {
     id: string;
@@ -86,10 +92,10 @@ export function ArExperienceClient({ experience, product, company, branding }: P
               dangerouslySetInnerHTML={{
                 __html: `
                   <model-viewer
-                    src="${product.modelUrl || product.usdzUrl}"
-                    ${product.usdzUrl ? `ios-src="${product.usdzUrl}"` : ''}
-                    ${product.posterUrl ? `poster="${product.posterUrl}"` : ''}
-                    alt="${experience.name}"
+                    src="${escapeHtml(product.modelUrl || product.usdzUrl || '')}"
+                    ${product.usdzUrl ? `ios-src="${escapeHtml(product.usdzUrl)}"` : ''}
+                    ${product.posterUrl ? `poster="${escapeHtml(product.posterUrl)}"` : ''}
+                    alt="${escapeHtml(experience.name)}"
                     camera-controls
                     touch-action="pan-y"
                     auto-rotate
@@ -265,9 +271,9 @@ export function ArExperienceClient({ experience, product, company, branding }: P
             dangerouslySetInnerHTML={{
               __html: `
                 <model-viewer
-                  src="${product.modelUrl}"
-                  ${product.usdzUrl ? `ios-src="${product.usdzUrl}"` : ''}
-                  alt="${experience.name}"
+                  src="${escapeHtml(product.modelUrl || '')}"
+                  ${product.usdzUrl ? `ios-src="${escapeHtml(product.usdzUrl)}"` : ''}
+                  alt="${escapeHtml(experience.name)}"
                   camera-controls auto-rotate ar
                   ar-modes="webxr scene-viewer quick-look"
                   shadow-intensity="1"

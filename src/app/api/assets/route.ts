@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession, isSuperAdmin } from '@/lib/auth';
-import { saveFile, validateFileSize, resolveAssetType, isAllowedExtension, buildProductPath } from '@/lib/storage';
+import { saveFile, validateFileSize, resolveAssetType, isAllowedExtension, isAllowedFile, buildProductPath } from '@/lib/storage';
 import { logAudit } from '@/lib/audit';
 import { calculateCompletenessScore } from '@/lib/utils';
 import { queueModelOptimization } from '@/lib/model-pipeline';
@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'File and productId are required' }, { status: 400 });
   }
 
-  // Validate file extension
-  if (!isAllowedExtension(file.name)) {
+  // Validate file extension and MIME type
+  if (!isAllowedFile(file.name, file.type)) {
     return NextResponse.json({
       success: false,
       error: `File type not allowed. Supported: GLB, GLTF, USDZ, JPG, PNG, WebP, SVG`,
