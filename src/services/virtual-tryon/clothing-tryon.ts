@@ -13,6 +13,7 @@ import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
 import { computeBodyMeasurements, enhanceWithProfile, type BodyProfile } from '@/services/body/body-measurements';
 import { generateOcclusionMask, renderOcclusionSVG } from './body-mask';
+import { warpGarment } from './cloth-warp';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -150,15 +151,52 @@ async function processTryOnJob(jobId: string) {
     overlayLeft = Math.max(0, Math.min(overlayLeft, pW - garmentW));
     overlayTop = Math.max(0, Math.min(overlayTop, pH - garmentH));
 
-    const garmentResized = await sharp(job.garmentImagePath)
-      .resize({
-        width: garmentW,
-        height: garmentH,
-        fit: 'contain',
-        background: { r: 0, g: 0, b: 0, alpha: 0 },
-      })
-      .png()
-      .toBuffer();
+    // --- CLOTH WARPING ---
+    // If we have landmarks + measurements, warp the garment to follow body contour.
+    // Otherwise, fall back to flat rectangular resize.
+    let garmentResized: Buffer = Buffer.alloc(0);
+    let warpApplied = false;
+
+    if (bodyMeasurements && storedLandmarks && storedLandmarks.length >= 25) {
+      try {
+        const warpResult = await warpGarment(
+          await sharp(job.garmentImagePath).png().toBuffer(),
+          {
+            measurements: bodyMeasurements,
+            landmarks: storedLandmarks,
+            targetHeight: garmentH,
+            imageWidth: pW,
+            imageHeight: pH,
+            stripCount: 12,
+          },
+        );
+
+        garmentResized = warpResult.buffer;
+        // Update dimensions to match the warped output
+        garmentW = warpResult.canvasWidth;
+        garmentH = warpResult.canvasHeight;
+        // Re-center the garment overlay based on warped width
+        overlayLeft = Math.round(bodyMeasurements.chestCenterXPx - garmentW / 2);
+        overlayLeft = Math.max(0, Math.min(overlayLeft, pW - garmentW));
+        overlayTop = Math.max(0, Math.min(overlayTop, pH - garmentH));
+        warpApplied = true;
+      } catch (warpErr) {
+        console.warn(`[TryOnJob ${jobId}] Cloth warp failed, falling back to flat resize:`, warpErr);
+        // Fall through to flat resize below
+      }
+    }
+
+    if (!warpApplied) {
+      garmentResized = await sharp(job.garmentImagePath)
+        .resize({
+          width: garmentW,
+          height: garmentH,
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
+        .png()
+        .toBuffer();
+    }
 
     const garmentMeta = await sharp(garmentResized).metadata();
     const gW = garmentMeta.width || garmentW;
@@ -264,8 +302,9 @@ async function processTryOnJob(jobId: string) {
             profileWeightKg: storedProfile.weightKg,
             profileUsualSize: storedProfile.usualSize || null,
           }),
+          clothWarp: warpApplied,
           occlusionMask: occlusionApplied,
-          note: 'Estimation-based compositing with landmark-polygon occlusion masking — not pixel-accurate segmentation. Results are approximate.',
+          note: 'Estimation-based compositing with section-geometric cloth warping and landmark-polygon occlusion masking — not AI deformation or pixel-accurate segmentation. Results are approximate.',
         },
       },
     });
