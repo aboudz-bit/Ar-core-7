@@ -10,6 +10,7 @@ interface ProductCard {
   description: string;
   price: string;
   color: string;
+  image?: string;
 }
 
 interface Restaurant {
@@ -96,6 +97,7 @@ const restaurants: Restaurant[] = [
         description: 'Dry-aged A5 Japanese wagyu ribeye, charcoal-grilled to perfection with truffle butter and seasonal vegetables.',
         price: 'SAR 450',
         color: '#7f1d1d',
+        image: '/images/sh-wagyu-steak.webp',
       },
       {
         name: 'Tomahawk Steak',
@@ -103,6 +105,7 @@ const restaurants: Restaurant[] = [
         description: '1.2kg bone-in tomahawk ribeye, wood-fired and served with roasted garlic, bone marrow, and peppercorn sauce.',
         price: 'SAR 380',
         color: '#991b1b',
+        image: '/images/sh-tomahawk-steak.jpeg',
       },
       {
         name: 'Truffle Burger',
@@ -274,10 +277,19 @@ export default function DemoPage() {
                     className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-lg transition-shadow"
                     data-testid={`card-product-${product.slug}`}
                   >
-                    <div className="relative h-44 flex items-center justify-center overflow-hidden" style={{ background: `linear-gradient(135deg, ${product.color}11, ${product.color}22)` }}>
-                      <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${product.color}22, ${product.color}44)` }}>
-                        <RestIcon className="w-14 h-14" style={{ color: product.color }} />
-                      </div>
+                    <div className="relative h-44 flex items-center justify-center overflow-hidden" style={{ background: product.image ? undefined : `linear-gradient(135deg, ${product.color}11, ${product.color}22)` }}>
+                      {product.image ? (
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                          data-testid={`img-product-${product.slug}`}
+                        />
+                      ) : (
+                        <div className="w-28 h-28 rounded-full flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${product.color}22, ${product.color}44)` }}>
+                          <RestIcon className="w-14 h-14" style={{ color: product.color }} />
+                        </div>
+                      )}
                       <div className="absolute top-3 right-3 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-sm font-bold text-gray-900">
                         {product.price}
                       </div>
