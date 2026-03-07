@@ -29,6 +29,7 @@ export default async function ArExperiencePage({ params }: Props) {
         usdzUrl: data.product.usdzUrl,
         posterUrl: data.product.posterUrl,
         targetImageUrl: data.product.targetImageUrl,
+        fallbackImageUrl: data.product.fallbackImageUrl,
       } : null}
       company={{
         id: data.company.id,

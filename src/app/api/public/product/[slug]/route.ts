@@ -9,7 +9,6 @@ export async function GET(
 ) {
   const slug = params.slug;
 
-  // Find product by generating slug from title
   const products = await prisma.product.findMany({
     where: { status: 'ACTIVE' },
     include: {
@@ -25,21 +24,34 @@ export async function GET(
 
   const product = products.find((p) => {
     const productSlug = p.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return productSlug === slug;
+    if (productSlug === slug) return true;
+    return p.experiences.some((e) => e.slug === slug);
   });
 
   if (!product) {
     return NextResponse.json({ success: false, error: 'Product not found' }, { status: 404 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const glbAsset = product.assets.find((a) => a.assetType === 'MODEL_GLB');
+  const usdzAsset = product.assets.find((a) => a.assetType === 'MODEL_USDZ');
   const posterAsset = product.assets.find((a) => a.assetType === 'POSTER');
+  const thumbnailAsset = product.assets.find((a) => a.assetType === 'THUMBNAIL');
+  const imageAsset = product.assets.find((a) => a.assetType === 'IMAGE_2D');
+
+  const fallbackImage = posterAsset?.filePath
+    || thumbnailAsset?.filePath
+    || imageAsset?.filePath
+    || product.thumbnailUrl
+    || null;
 
   return NextResponse.json({
     name: product.title,
-    model: glbAsset ? `${appUrl}${glbAsset.filePath}` : null,
-    poster: posterAsset ? `${appUrl}${posterAsset.filePath}` : null,
+    model: glbAsset ? glbAsset.filePath : null,
+    modelUsdz: usdzAsset ? usdzAsset.filePath : null,
+    poster: posterAsset ? posterAsset.filePath : null,
+    image: fallbackImage,
+    hasModel: !!glbAsset || !!usdzAsset,
+    hasImage: !!fallbackImage,
     tracking: 'surface',
     description: product.description,
     company: product.company.name,

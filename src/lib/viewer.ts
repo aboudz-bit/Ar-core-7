@@ -20,6 +20,7 @@ export interface ViewerData {
     usdzUrl: string | null;
     posterUrl: string | null;
     targetImageUrl: string | null;
+    fallbackImageUrl: string | null;
     scalePreset: number;
   } | null;
   company: {
@@ -57,6 +58,8 @@ export async function getViewerData(experienceSlug: string): Promise<ViewerData 
   const glbAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_GLB');
   const usdzAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_USDZ');
   const posterAsset = experience.product?.assets.find((a) => a.assetType === 'POSTER');
+  const thumbnailAsset = experience.product?.assets.find((a) => a.assetType === 'THUMBNAIL');
+  const imageAsset = experience.product?.assets.find((a) => a.assetType === 'IMAGE_2D');
   const targetAsset = experience.product?.assets.find((a) => a.assetType === 'TARGET_IMAGE');
 
   // Fetch white-label settings for this company
@@ -86,6 +89,7 @@ export async function getViewerData(experienceSlug: string): Promise<ViewerData 
       usdzUrl: usdzAsset?.filePath || null,
       posterUrl: posterAsset?.filePath || null,
       targetImageUrl: targetAsset?.filePath || null,
+      fallbackImageUrl: posterAsset?.filePath || thumbnailAsset?.filePath || imageAsset?.filePath || experience.product?.thumbnailUrl || null,
       scalePreset: experience.product.scalePreset,
     } : null,
     company: {
