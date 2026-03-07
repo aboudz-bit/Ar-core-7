@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Save uploaded files
-    const uploadDir = path.join(process.cwd(), 'uploads', 'tryon', companyId);
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'tryon', companyId);
     await mkdir(uploadDir, { recursive: true });
 
     const timestamp = Date.now();
@@ -91,13 +91,16 @@ export async function POST(req: NextRequest) {
       const garmentBuffer = Buffer.from(await garmentImageFile.arrayBuffer());
       await writeFile(resolvedGarmentPath, garmentBuffer);
     } else {
-      // Use existing garment image from product assets
-      resolvedGarmentPath = garmentImagePath!;
-      // Validate it's a relative path under uploads
-      if (!resolvedGarmentPath.startsWith('/uploads/')) {
+      // Use existing garment image from product assets — sanitize path
+      const safePath = path.normalize(garmentImagePath!).replace(/^(\.\.(\/|\\|$))+/, '');
+      if (safePath.includes('..') || path.isAbsolute(safePath)) {
         return NextResponse.json({ success: false, error: 'Invalid garment image path' }, { status: 400 });
       }
-      resolvedGarmentPath = path.join(process.cwd(), resolvedGarmentPath);
+      const allowedPrefixes = ['/uploads/', '/demo-assets/'];
+      if (!allowedPrefixes.some(p => safePath.startsWith(p))) {
+        return NextResponse.json({ success: false, error: 'Garment path must be under /uploads/ or /demo-assets/' }, { status: 400 });
+      }
+      resolvedGarmentPath = path.join(process.cwd(), 'public', safePath);
     }
 
     const job = await createTryOnJob({

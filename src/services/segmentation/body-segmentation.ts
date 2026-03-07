@@ -143,7 +143,9 @@ export async function segmentBody(
       .raw()
       .toBuffer();
 
-    const input = tf.tensor3d(rawPixels as unknown as ArrayBuffer, [procH, procW, 3], 'int32');
+    const uint8Data = new Uint8Array(rawPixels);
+    const int32Data = Int32Array.from(uint8Data);
+    const input = tf.tensor3d(int32Data, [procH, procW, 3], 'int32');
 
     const segmentation = await model.segmentPersonParts(input, {
       flipHorizontal: false,

@@ -197,10 +197,6 @@ async function processTryOnJob(jobId: string) {
         .toBuffer();
     }
 
-    const garmentMeta = await sharp(garmentResized).metadata();
-    const gW = garmentMeta.width || garmentW;
-    const gH = garmentMeta.height || garmentH;
-
     const outputDir = path.join(process.cwd(), 'public', 'uploads', 'tryon-output');
     await mkdir(outputDir, { recursive: true });
 

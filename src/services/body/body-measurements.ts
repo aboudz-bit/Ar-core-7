@@ -51,6 +51,13 @@ function dist(a: LandmarkPoint, b: LandmarkPoint): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/** Pixel-accurate distance accounting for different canvas width/height scales */
+function distPx(a: LandmarkPoint, b: LandmarkPoint, canvasWidth: number, canvasHeight: number): number {
+  const dx = (a.x - b.x) * canvasWidth;
+  const dy = (a.y - b.y) * canvasHeight;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
 function midpoint(a: LandmarkPoint, b: LandmarkPoint): { x: number; y: number } {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
@@ -125,10 +132,17 @@ export function computeBodyMeasurements(
     chestCenterX,
     chestCenterY,
 
-    shoulderWidthPx: shoulderWidth * canvasWidth,
-    hipWidthPx: hipWidth * canvasWidth,
-    torsoHeightPx: torsoHeight * canvasHeight,
-    armLengthPx: armLength * canvasHeight,
+    shoulderWidthPx: distPx(ls, rs, canvasWidth, canvasHeight),
+    hipWidthPx: distPx(lh, rh, canvasWidth, canvasHeight),
+    torsoHeightPx: (() => {
+      const dx = (shoulderMid.x - hipMid.x) * canvasWidth;
+      const dy = (shoulderMid.y - hipMid.y) * canvasHeight;
+      return Math.sqrt(dx * dx + dy * dy);
+    })(),
+    armLengthPx: armVisibility > 0.3
+      ? ((distPx(ls, le, canvasWidth, canvasHeight) + distPx(le, lw, canvasWidth, canvasHeight))
+        + (distPx(rs, re, canvasWidth, canvasHeight) + distPx(re, rw, canvasWidth, canvasHeight))) / 2
+      : torsoHeight * canvasHeight * 0.9,
     chestCenterXPx: chestCenterX * canvasWidth,
     chestCenterYPx: chestCenterY * canvasHeight,
 

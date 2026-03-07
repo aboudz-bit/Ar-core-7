@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: false, error: 'Invalid garment image path' }, { status: 400 });
       }
       const allowedPrefixes = ['/uploads/', '/demo-assets/'];
-      if (!allowedPrefixes.some(p => garmentImagePath!.startsWith(p))) {
+      if (!allowedPrefixes.some(p => safePath.startsWith(p))) {
         return NextResponse.json({ success: false, error: 'Garment path must be under /uploads/ or /demo-assets/' }, { status: 400 });
       }
       resolvedGarmentPath = path.join(process.cwd(), 'public', safePath);

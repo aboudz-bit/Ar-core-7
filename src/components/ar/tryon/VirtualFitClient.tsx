@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Loader2, CheckCircle, XCircle, ImageIcon, Shirt, ArrowRight, RotateCcw, Ruler, Scan } from 'lucide-react';
 import { loadPoseLib } from '@/lib/mediapipe-loader';
 
@@ -131,9 +131,20 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const garmentInputRef = useRef<HTMLInputElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Clean up polling interval and object URLs on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+      if (personPreview) URL.revokeObjectURL(personPreview);
+      if (garmentPreview) URL.revokeObjectURL(garmentPreview);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handlePersonSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (personPreview) URL.revokeObjectURL(personPreview);
     setPersonImage(file);
     setPersonPreview(URL.createObjectURL(file));
     setOutputImage(null);
@@ -159,6 +170,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const handleGarmentSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (garmentPreview) URL.revokeObjectURL(garmentPreview);
     setGarmentImage(file);
     setGarmentPreview(URL.createObjectURL(file));
     setSelectedGarmentOverlay(null);
@@ -191,7 +203,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
           // Extract size recommendation from job metadata
           const meta = data.data.metadata as Record<string, unknown> | null;
           if (meta?.sizeRecommendation) {
-            setSizeRec(meta.sizeRecommendation as typeof sizeRec);
+            setSizeRec(meta.sizeRecommendation as NonNullable<typeof sizeRec>);
           }
           if (pollRef.current) clearInterval(pollRef.current);
         } else if (jobStatus === 'FAILED') {

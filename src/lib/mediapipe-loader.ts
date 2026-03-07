@@ -17,15 +17,22 @@ function loadScript(src: string): Promise<void> {
 
   const promise = new Promise<void>((resolve, reject) => {
     // Check if script already exists in DOM
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve();
+    const existingScript = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
+    if (existingScript) {
+      // Script element exists — wait for it to finish loading if it hasn't yet
+      if (existingScript.dataset.loaded === 'true') {
+        resolve();
+      } else {
+        existingScript.addEventListener('load', () => resolve());
+        existingScript.addEventListener('error', () => reject(new Error(`Failed to load MediaPipe script: ${src}`)));
+      }
       return;
     }
 
     const script = document.createElement('script');
     script.src = src;
     script.async = true;
-    script.onload = () => resolve();
+    script.onload = () => { script.dataset.loaded = 'true'; resolve(); };
     script.onerror = () => reject(new Error(`Failed to load MediaPipe script: ${src}`));
     document.head.appendChild(script);
   });
@@ -45,7 +52,7 @@ export async function loadFaceMeshLib(): Promise<
   new (config: { locateFile: (file: string) => string }) => {
     setOptions: (opts: Record<string, unknown>) => void;
     onResults: (cb: (results: { multiFaceLandmarks?: { x: number; y: number; z: number }[][] }) => void) => void;
-    send: (input: { image: HTMLVideoElement }) => Promise<void>;
+    send: (input: { image: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement }) => Promise<void>;
     initialize: () => Promise<void>;
     close: () => void;
   }
