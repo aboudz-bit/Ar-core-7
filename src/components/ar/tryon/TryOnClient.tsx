@@ -148,13 +148,13 @@ export function TryOnClient({ experience, product, company, overlays, branding }
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden">
-      {/* Hidden video element for camera feed */}
+      {/* Video element for camera feed — positioned off-screen, NOT display:none (iOS requires it visible) */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className="hidden"
+        style={{ position: 'absolute', width: 1, height: 1, top: -9999, left: -9999, opacity: 0 }}
       />
 
       {/* Main canvas — video + overlays rendered here */}

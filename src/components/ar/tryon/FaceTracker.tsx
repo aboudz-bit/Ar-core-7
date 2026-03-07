@@ -2,10 +2,6 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 
-/**
- * Face landmark point from MediaPipe Face Mesh.
- * Each point has x, y (normalized 0-1) and z (depth estimate).
- */
 export interface FaceLandmark {
   x: number;
   y: number;
@@ -26,7 +22,6 @@ interface FaceTrackerProps {
   smoothingFactor?: number;
 }
 
-// MediaPipe key landmark indices
 const LEFT_EYE_OUTER = 33;
 const RIGHT_EYE_OUTER = 263;
 const NOSE_TIP = 1;
@@ -42,15 +37,12 @@ function estimateRotation(landmarks: FaceLandmark[]): { pitch: number; yaw: numb
   const leftEar = landmarks[LEFT_EAR];
   const rightEar = landmarks[RIGHT_EAR];
 
-  // Yaw: horizontal rotation based on nose position relative to ears
   const earMidX = (leftEar.x + rightEar.x) / 2;
   const yaw = (nose.x - earMidX) * 2;
 
-  // Pitch: vertical rotation based on nose-forehead-chin alignment
   const faceMidY = (forehead.y + chin.y) / 2;
   const pitch = (nose.y - faceMidY) * 2;
 
-  // Roll: head tilt based on eye line angle
   const leftEye = landmarks[LEFT_EYE_OUTER];
   const rightEye = landmarks[RIGHT_EYE_OUTER];
   const roll = Math.atan2(rightEye.y - leftEye.y, rightEye.x - leftEye.x);
@@ -58,52 +50,16 @@ function estimateRotation(landmarks: FaceLandmark[]): { pitch: number; yaw: numb
   return { pitch, yaw, roll };
 }
 
-/**
- * FaceTracker — loads MediaPipe Face Mesh and runs real-time face detection
- * on the provided video element. Calls onResults with landmark data each frame.
- *
- * This is a headless component (no visual output). It manages the MediaPipe
- * lifecycle and animation loop.
- */
 export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.3 }: FaceTrackerProps) {
   const faceMeshRef = useRef<unknown>(null);
   const rafRef = useRef<number>(0);
   const prevResultRef = useRef<FaceTrackingResult | null>(null);
-
-  const smoothLandmarks = useCallback((
-    current: FaceLandmark[],
-    previous: FaceLandmark[] | null,
-    factor: number
-  ): FaceLandmark[] => {
-    if (!previous || previous.length !== current.length) return current;
-    return current.map((point, i) => ({
-      x: previous[i].x + (point.x - previous[i].x) * factor,
-      y: previous[i].y + (point.y - previous[i].y) * factor,
-      z: previous[i].z + (point.z - previous[i].z) * factor,
-    }));
-  }, []);
-
-  const processFrame = useCallback(async () => {
-    if (!enabled || !videoRef.current || !faceMeshRef.current) {
-      return; // Stop loop when disabled — it will be restarted by the effect
-    }
-
-    const video = videoRef.current;
-    if (video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(processFrame);
-      return;
-    }
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const faceMesh = faceMeshRef.current as any;
-      await faceMesh.send({ image: video });
-    } catch {
-      // Frame processing error, skip and continue
-    }
-
-    rafRef.current = requestAnimationFrame(processFrame);
-  }, [enabled, videoRef]);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const onResultsRef = useRef(onResults);
+  onResultsRef.current = onResults;
+  const smoothingRef = useRef(smoothingFactor);
+  smoothingRef.current = smoothingFactor;
 
   useEffect(() => {
     if (!enabled) {
@@ -113,11 +69,30 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
 
     let cancelled = false;
 
+    function processFrame() {
+      if (cancelled || !enabledRef.current) return;
+
+      const video = videoRef.current;
+      const faceMesh = faceMeshRef.current;
+      if (!video || !faceMesh || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (faceMesh as any).send({ image: video }).then(() => {
+        if (!cancelled) rafRef.current = requestAnimationFrame(processFrame);
+      }).catch(() => {
+        if (!cancelled) rafRef.current = requestAnimationFrame(processFrame);
+      });
+    }
+
     async function initFaceMesh() {
       try {
-        // Load MediaPipe Face Mesh from CDN via script injection
+        console.log('[FaceTracker] Loading MediaPipe FaceMesh from CDN...');
         const { loadFaceMeshLib } = await import('@/lib/mediapipe-loader');
         const FaceMesh = await loadFaceMeshLib();
+        console.log('[FaceTracker] FaceMesh constructor loaded');
 
         if (cancelled) return;
 
@@ -138,16 +113,20 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
 
           if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
             prevResultRef.current = null;
-            onResults(null);
+            onResultsRef.current(null);
             return;
           }
 
           const rawLandmarks = results.multiFaceLandmarks[0];
-          const smoothed = smoothLandmarks(
-            rawLandmarks,
-            prevResultRef.current?.landmarks || null,
-            smoothingFactor
-          );
+          const prev = prevResultRef.current?.landmarks || null;
+          const factor = smoothingRef.current;
+          const smoothed = (prev && prev.length === rawLandmarks.length)
+            ? rawLandmarks.map((point, i) => ({
+                x: prev[i].x + (point.x - prev[i].x) * factor,
+                y: prev[i].y + (point.y - prev[i].y) * factor,
+                z: prev[i].z + (point.z - prev[i].z) * factor,
+              }))
+            : rawLandmarks;
 
           const leftEye = smoothed[LEFT_EYE_OUTER];
           const rightEye = smoothed[RIGHT_EYE_OUTER];
@@ -162,25 +141,25 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
           );
 
           const rotation = estimateRotation(smoothed);
-
-          const result: FaceTrackingResult = {
-            landmarks: smoothed,
-            faceWidth,
-            faceHeight,
-            rotation,
-          };
-
+          const result: FaceTrackingResult = { landmarks: smoothed, faceWidth, faceHeight, rotation };
           prevResultRef.current = result;
-          onResults(result);
+          onResultsRef.current(result);
         });
 
-        faceMeshRef.current = faceMesh;
+        console.log('[FaceTracker] Initializing FaceMesh WASM...');
+        await faceMesh.initialize();
+        console.log('[FaceTracker] FaceMesh WASM initialized, starting frame loop');
 
-        // Start processing loop
+        if (cancelled) {
+          faceMesh.close?.();
+          return;
+        }
+
+        faceMeshRef.current = faceMesh;
         rafRef.current = requestAnimationFrame(processFrame);
       } catch (err) {
-        console.error('Failed to initialize MediaPipe Face Mesh:', err);
-        onResults(null);
+        console.error('[FaceTracker] Failed to initialize MediaPipe Face Mesh:', err);
+        onResultsRef.current(null);
       }
     }
 
@@ -195,15 +174,12 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
         faceMeshRef.current = null;
       }
     };
-  }, [enabled, onResults, smoothingFactor, smoothLandmarks, processFrame]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
-  return null; // Headless component
+  return null;
 }
 
-/**
- * Hook to manage camera stream for try-on.
- * Returns video ref and stream state.
- */
 export function useTryOnCamera() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -212,23 +188,67 @@ export function useTryOnCamera() {
 
   const startCamera = useCallback(async () => {
     try {
+      console.log('[Camera] Requesting getUserMedia...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
+        audio: false,
       });
+      console.log('[Camera] getUserMedia resolved, tracks:', stream.getVideoTracks().length);
 
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCameraReady(true);
+      const video = videoRef.current;
+      if (!video) {
+        console.error('[Camera] videoRef.current is null — video element not mounted');
+        setCameraError('Video element not available');
+        return;
       }
+
+      video.srcObject = stream;
+      console.log('[Camera] srcObject set, waiting for loadedmetadata...');
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video load timeout (10s)')), 10000);
+
+        function onLoaded() {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          resolve();
+        }
+        function onError() {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          reject(new Error('Video element error event'));
+        }
+
+        if (video.readyState >= 1) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          video.addEventListener('loadedmetadata', onLoaded);
+          video.addEventListener('error', onError);
+        }
+      });
+
+      console.log('[Camera] Metadata loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
+
+      try {
+        await video.play();
+      } catch (playErr) {
+        console.warn('[Camera] play() threw (may be auto-playing already):', playErr);
+      }
+
+      console.log('[Camera] Video playing, readyState:', video.readyState);
+      setCameraReady(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Camera access denied';
+      console.error('[Camera] Failed:', message, err);
       setCameraError(message);
     }
   }, []);
@@ -242,9 +262,7 @@ export function useTryOnCamera() {
   }, []);
 
   useEffect(() => {
-    return () => {
-      stopCamera();
-    };
+    return () => { stopCamera(); };
   }, [stopCamera]);
 
   return { videoRef, cameraReady, cameraError, startCamera, stopCamera };

@@ -46,6 +46,7 @@ export async function loadFaceMeshLib(): Promise<
     setOptions: (opts: Record<string, unknown>) => void;
     onResults: (cb: (results: { multiFaceLandmarks?: { x: number; y: number; z: number }[][] }) => void) => void;
     send: (input: { image: HTMLVideoElement }) => Promise<void>;
+    initialize: () => Promise<void>;
     close: () => void;
   }
 > {
@@ -70,6 +71,7 @@ export async function loadPoseLib(): Promise<
       poseWorldLandmarks?: { x: number; y: number; z: number; visibility: number }[];
     }) => void) => void;
     send: (input: { image: HTMLVideoElement }) => Promise<void>;
+    initialize: () => Promise<void>;
     close: () => void;
   }
 > {

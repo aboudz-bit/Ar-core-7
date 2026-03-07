@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState } from 'react';
-import type { BodyLandmark } from '@/services/tracking/body-tracking';
+
+export interface BodyLandmark {
+  x: number;
+  y: number;
+  z: number;
+  visibility: number;
+}
 
 export interface BodyTrackingResult {
   landmarks: BodyLandmark[];
@@ -14,33 +20,13 @@ interface BodyTrackerProps {
   enabled: boolean;
 }
 
-/**
- * BodyTracker — loads MediaPipe Pose and runs real-time body landmark detection.
- * Headless component that manages the MediaPipe lifecycle and animation loop.
- */
 export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) {
   const poseRef = useRef<unknown>(null);
   const rafRef = useRef<number>(0);
-
-  const processFrame = useCallback(async () => {
-    if (!enabled || !videoRef.current || !poseRef.current) return;
-
-    const video = videoRef.current;
-    if (video.readyState < 2) {
-      rafRef.current = requestAnimationFrame(processFrame);
-      return;
-    }
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pose = poseRef.current as any;
-      await pose.send({ image: video });
-    } catch {
-      // Frame processing error, skip
-    }
-
-    rafRef.current = requestAnimationFrame(processFrame);
-  }, [enabled, videoRef]);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
+  const onResultsRef = useRef(onResults);
+  onResultsRef.current = onResults;
 
   useEffect(() => {
     if (!enabled) {
@@ -50,11 +36,30 @@ export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) 
 
     let cancelled = false;
 
+    function processFrame() {
+      if (cancelled || !enabledRef.current) return;
+
+      const video = videoRef.current;
+      const pose = poseRef.current;
+      if (!video || !pose || video.readyState < 2) {
+        rafRef.current = requestAnimationFrame(processFrame);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (pose as any).send({ image: video }).then(() => {
+        if (!cancelled) rafRef.current = requestAnimationFrame(processFrame);
+      }).catch(() => {
+        if (!cancelled) rafRef.current = requestAnimationFrame(processFrame);
+      });
+    }
+
     async function initPose() {
       try {
-        // Load MediaPipe Pose from CDN via script injection
+        console.log('[BodyTracker] Loading MediaPipe Pose from CDN...');
         const { loadPoseLib } = await import('@/lib/mediapipe-loader');
         const Pose = await loadPoseLib();
+        console.log('[BodyTracker] Pose constructor loaded');
 
         if (cancelled) return;
 
@@ -70,25 +75,37 @@ export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) 
           minTrackingConfidence: 0.5,
         });
 
-        pose.onResults((results) => {
+        pose.onResults((results: {
+          poseLandmarks?: BodyLandmark[];
+          poseWorldLandmarks?: BodyLandmark[];
+        }) => {
           if (cancelled) return;
 
           if (!results.poseLandmarks || results.poseLandmarks.length === 0) {
-            onResults(null);
+            onResultsRef.current(null);
             return;
           }
 
-          onResults({
+          onResultsRef.current({
             landmarks: results.poseLandmarks,
             worldLandmarks: results.poseWorldLandmarks || [],
           });
         });
 
+        console.log('[BodyTracker] Initializing Pose WASM...');
+        await pose.initialize();
+        console.log('[BodyTracker] Pose WASM initialized, starting frame loop');
+
+        if (cancelled) {
+          pose.close?.();
+          return;
+        }
+
         poseRef.current = pose;
         rafRef.current = requestAnimationFrame(processFrame);
       } catch (err) {
-        console.error('Failed to initialize MediaPipe Pose:', err);
-        onResults(null);
+        console.error('[BodyTracker] Failed to initialize MediaPipe Pose:', err);
+        onResultsRef.current(null);
       }
     }
 
@@ -103,15 +120,12 @@ export function BodyTracker({ videoRef, onResults, enabled }: BodyTrackerProps) 
         poseRef.current = null;
       }
     };
-  }, [enabled, onResults, processFrame]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]);
 
   return null;
 }
 
-/**
- * Hook to manage camera stream for body tracking.
- * Uses the back camera by default for full-body capture.
- */
 export function useBodyCamera(facingMode: 'user' | 'environment' = 'user') {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -120,23 +134,67 @@ export function useBodyCamera(facingMode: 'user' | 'environment' = 'user') {
 
   const startCamera = useCallback(async () => {
     try {
+      console.log('[BodyCamera] Requesting getUserMedia...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode,
           width: { ideal: 1280 },
           height: { ideal: 720 },
         },
+        audio: false,
       });
+      console.log('[BodyCamera] getUserMedia resolved, tracks:', stream.getVideoTracks().length);
 
       streamRef.current = stream;
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setCameraReady(true);
+      const video = videoRef.current;
+      if (!video) {
+        console.error('[BodyCamera] videoRef.current is null — video element not mounted');
+        setCameraError('Video element not available');
+        return;
       }
+
+      video.srcObject = stream;
+      console.log('[BodyCamera] srcObject set, waiting for loadedmetadata...');
+
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Video load timeout (10s)')), 10000);
+
+        function onLoaded() {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          resolve();
+        }
+        function onError() {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoaded);
+          video.removeEventListener('error', onError);
+          reject(new Error('Video element error event'));
+        }
+
+        if (video.readyState >= 1) {
+          clearTimeout(timeout);
+          resolve();
+        } else {
+          video.addEventListener('loadedmetadata', onLoaded);
+          video.addEventListener('error', onError);
+        }
+      });
+
+      console.log('[BodyCamera] Metadata loaded, dimensions:', video.videoWidth, 'x', video.videoHeight);
+
+      try {
+        await video.play();
+      } catch (playErr) {
+        console.warn('[BodyCamera] play() threw (may be auto-playing already):', playErr);
+      }
+
+      console.log('[BodyCamera] Video playing, readyState:', video.readyState);
+      setCameraReady(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Camera access denied';
+      console.error('[BodyCamera] Failed:', message, err);
       setCameraError(message);
     }
   }, [facingMode]);

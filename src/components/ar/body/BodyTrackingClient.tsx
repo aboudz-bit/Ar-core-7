@@ -109,7 +109,7 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden">
-      <video ref={videoRef} playsInline muted autoPlay className="hidden" />
+      <video ref={videoRef} playsInline muted autoPlay style={{ position: 'absolute', width: 1, height: 1, top: -9999, left: -9999, opacity: 0 }} />
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full object-cover" />
 
       {/* Body tracking engine (headless) */}
