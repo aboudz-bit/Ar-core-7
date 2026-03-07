@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
 
   const { searchParams } = new URL(req.url);
   const companyId = searchParams.get('companyId');
-  const days = parseInt(searchParams.get('days') || '30');
+  const days = Math.max(1, Math.min(365, parseInt(searchParams.get('days') || '30') || 30));
 
   const companyIds = isSuperAdmin(session)
     ? companyId ? [companyId] : undefined

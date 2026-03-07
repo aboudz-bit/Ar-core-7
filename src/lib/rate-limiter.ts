@@ -71,7 +71,8 @@ class SimpleRedisClient implements RedisLikeClient {
 
   async incr(key: string): Promise<number> {
     const result = await this.command('INCR', key);
-    return parseInt(result) || 0;
+    const parsed = Number(result);
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   async expire(key: string, seconds: number): Promise<void> {
@@ -80,7 +81,8 @@ class SimpleRedisClient implements RedisLikeClient {
 
   async ttl(key: string): Promise<number> {
     const result = await this.command('TTL', key);
-    return parseInt(result) || -1;
+    const parsed = Number(result);
+    return Number.isFinite(parsed) ? parsed : -1;
   }
 
   async get(key: string): Promise<string | null> {
