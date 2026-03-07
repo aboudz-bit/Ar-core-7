@@ -3,9 +3,18 @@ import { cookies } from 'next/headers';
 import { prisma } from './prisma';
 import type { JWTPayload } from '@/types';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'dev-secret-key'
-);
+function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret === 'dev-secret-key' || secret === 'dev-secret-key-ar-core-7-change-in-production') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('CRITICAL: JWT_SECRET must be set to a strong random value in production. Generate one with: openssl rand -base64 64');
+    }
+    console.warn('[SECURITY] Using insecure default JWT_SECRET. Set JWT_SECRET env var for production.');
+  }
+  return new TextEncoder().encode(secret || 'dev-secret-key');
+}
+
+const JWT_SECRET = getJwtSecret();
 
 export async function createToken(payload: JWTPayload): Promise<string> {
   return new SignJWT(payload as unknown as Record<string, unknown>)

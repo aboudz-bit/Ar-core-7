@@ -15,7 +15,7 @@ export default async function ProductViewerPage({ params }: Props) {
 
   // Find product by matching slug-style title
   const products = await prisma.product.findMany({
-    where: { companyId: company.id, status: 'ACTIVE' },
+    where: { companyId: company.id, status: { in: ['ACTIVE', 'AR_READY'] } },
     include: { assets: true },
   });
 

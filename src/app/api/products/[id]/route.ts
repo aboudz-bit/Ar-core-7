@@ -28,7 +28,26 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  return NextResponse.json({ success: true, data: product });
+  // Include latest generation job if any
+  const generationJob = await prisma.imageTo3DJob.findFirst({
+    where: { productId: params.id },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      ...product,
+      generationJob: generationJob ? {
+        id: generationJob.id,
+        status: generationJob.status,
+        provider: generationJob.provider,
+        errorMessage: generationJob.errorMessage,
+        startedAt: generationJob.startedAt,
+        completedAt: generationJob.completedAt,
+      } : null,
+    },
+  });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -44,10 +63,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // Whitelist allowed fields to prevent mass assignment
+  const allowedFields = ['title', 'sku', 'category', 'description', 'brand', 'thumbnailUrl',
+    'status', 'tags', 'dimensionWidth', 'dimensionHeight', 'dimensionDepth', 'dimensionUnit',
+    'scalePreset', 'anchorType', 'defaultSceneConfig', 'externalId', 'externalSource', 'externalHandle'] as const;
+  const data: Record<string, unknown> = {};
+  for (const key of allowedFields) {
+    if (key in body) data[key] = body[key];
+  }
+
   const updated = await prisma.product.update({
     where: { id: params.id },
-    data: body,
+    data,
     include: {
       company: { select: { id: true, name: true, slug: true } },
       assets: true,
@@ -60,7 +94,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     action: 'UPDATE',
     entity: 'Product',
     entityId: product.id,
-    details: body,
+    details: { updatedFields: Object.keys(data) },
   });
 
   return NextResponse.json({ success: true, data: updated });

@@ -385,6 +385,13 @@ async function saveFileLocal(buffer: Buffer, fileName: string, subDir: string = 
 
 async function deleteFileLocal(filePath: string): Promise<void> {
   const fullPath = path.join('./public', filePath);
+  // Prevent path traversal — ensure resolved path stays within public directory
+  const resolvedPath = path.resolve(fullPath);
+  const publicRoot = path.resolve('./public');
+  if (!resolvedPath.startsWith(publicRoot)) {
+    console.error('Path traversal attempt blocked:', filePath);
+    return;
+  }
   try {
     if (existsSync(fullPath)) {
       await unlink(fullPath);
@@ -419,8 +426,14 @@ export function validateFileSize(sizeBytes: number): boolean {
   return sizeBytes <= maxSize;
 }
 
+const VALID_ASSET_TYPES = [
+  'MODEL_GLB', 'MODEL_GLTF', 'MODEL_USDZ', 'IMAGE_2D',
+  'POSTER', 'THUMBNAIL', 'TARGET_IMAGE', 'FACE_EFFECT',
+];
+
 export function resolveAssetType(fileName: string, mimeType: string, explicitType?: string | null): string {
-  if (explicitType) return explicitType;
+  // Only accept known asset types — prevents arbitrary type injection
+  if (explicitType && VALID_ASSET_TYPES.includes(explicitType)) return explicitType;
   const ext = fileName.toLowerCase().split('.').pop() || '';
   if (ext === 'glb') return 'MODEL_GLB';
   if (ext === 'gltf') return 'MODEL_GLTF';
@@ -441,6 +454,23 @@ export function isAllowedExtension(fileName: string): boolean {
   const ext = fileName.toLowerCase().split('.').pop() || '';
   const allowed = ['glb', 'gltf', 'usdz', 'jpg', 'jpeg', 'png', 'webp', 'svg'];
   return allowed.includes(ext);
+}
+
+const ALLOWED_MIME_TYPES = [
+  'model/gltf-binary', 'model/gltf+json', 'model/vnd.usdz+zip',
+  'image/jpeg', 'image/png', 'image/webp', 'image/svg+xml',
+  'application/octet-stream', // Binary fallback for 3D models
+];
+
+/** Validate both extension and MIME type to prevent masqueraded file uploads */
+export function isAllowedFile(fileName: string, mimeType: string): boolean {
+  if (!isAllowedExtension(fileName)) return false;
+  // application/octet-stream is acceptable for 3D model binaries
+  if (mimeType === 'application/octet-stream') {
+    const ext = fileName.toLowerCase().split('.').pop() || '';
+    return ['glb', 'gltf', 'usdz'].includes(ext);
+  }
+  return ALLOWED_MIME_TYPES.includes(mimeType);
 }
 
 export function getAssetTypeLabel(assetType: string): string {

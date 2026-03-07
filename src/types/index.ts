@@ -9,6 +9,7 @@ export type {
   AnalyticsEvent,
   Setting,
   AuditLog,
+  TryOnJob,
 } from '@prisma/client';
 
 export type {

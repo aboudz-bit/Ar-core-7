@@ -16,7 +16,11 @@ enum UserRole {
 
 enum ProductStatus {
   DRAFT
+  IMAGE_ONLY
+  GENERATING_3D
+  AR_READY
   ACTIVE
+  GENERATION_FAILED
   ARCHIVED
 }
 
@@ -33,6 +37,9 @@ enum ExperienceType {
   IMAGE_TARGET
   QR_LAUNCH
   EMBED_VIEWER
+  FACE_TRYON
+  BODY_TRYON
+  CLOTHING_TRYON_PHOTO
 }
 
 enum ApiKeyStatus {
@@ -54,6 +61,13 @@ enum AssetType {
   TARGET_IMAGE
   FACE_EFFECT
   THUMBNAIL
+  FACE_OVERLAY_MODEL
+  FACE_OVERLAY_IMAGE
+  BODY_OVERLAY_MODEL
+  BODY_REFERENCE_IMAGE
+  GARMENT_IMAGE
+  TRYON_OUTPUT_IMAGE
+  TRACKING_CONFIG_JSON
 }
 
 model User {
@@ -170,6 +184,7 @@ model ProductAsset {
   fileSize      Int
   mimeType      String
   metadata      Json?
+  source        String    @default("manual") // manual, ai_generated
   isProcessed   Boolean   @default(false)
   processingStatus String? @default("pending")
   createdAt     DateTime  @default(now())
@@ -351,4 +366,48 @@ model ModelOptimizationJob {
 
   @@index([status])
   @@index([assetId])
+}
+
+model ImageTo3DJob {
+  id              String    @id @default(cuid())
+  productId       String
+  companyId       String
+  sourceAssetId   String    // The IMAGE_2D asset that triggered generation
+  sourceImagePath String    // Path to the source image
+  status          String    @default("pending") // pending, processing, completed, failed
+  provider        String    @default("triposr") // triposr, instantmesh
+  outputGlbPath   String?
+  outputAssetId   String?   // The generated MODEL_GLB asset ID
+  errorMessage    String?
+  retryCount      Int       @default(0)
+  maxRetries      Int       @default(3)
+  metadata        Json?     // { inferenceTime, modelVertices, modelSize, etc. }
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([productId])
+  @@index([status])
+  @@index([companyId])
+}
+
+model TryOnJob {
+  id                String    @id @default(cuid())
+  companyId         String
+  experienceId      String?
+  personImagePath   String    // Path to the uploaded person photo
+  garmentImagePath  String    // Path to the uploaded garment image
+  outputImagePath   String?   // Path to the generated try-on result
+  outputAssetId     String?   // The generated TRYON_OUTPUT_IMAGE asset ID
+  status            String    @default("UPLOADED") // UPLOADED, PROCESSING, COMPLETE, FAILED
+  provider          String    @default("internal") // internal, viton_hd, external_api
+  errorMessage      String?
+  metadata          Json?     // { processingTime, modelUsed, resolution, etc. }
+  startedAt         DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([experienceId])
+  @@index([status])
 }

@@ -9,7 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { PageLoader } from '@/components/ui/LoadingSpinner';
 import {
   Sparkles, Plus, Eye, ArrowRight, Smartphone, Target, QrCode, Code,
-  AlertTriangle, CheckCircle, Box, Image as ImageIcon
+  AlertTriangle, CheckCircle, Box, Image as ImageIcon, ScanFace, PersonStanding, Shirt
 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
@@ -37,6 +37,9 @@ const TYPE_ICONS: Record<string, typeof Eye> = {
   IMAGE_TARGET: Target,
   QR_LAUNCH: QrCode,
   EMBED_VIEWER: Code,
+  FACE_TRYON: ScanFace,
+  BODY_TRYON: PersonStanding,
+  CLOTHING_TRYON_PHOTO: Shirt,
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -45,6 +48,9 @@ const TYPE_COLORS: Record<string, string> = {
   IMAGE_TARGET: 'bg-emerald-50 text-emerald-600',
   QR_LAUNCH: 'bg-amber-50 text-amber-600',
   EMBED_VIEWER: 'bg-rose-50 text-rose-600',
+  FACE_TRYON: 'bg-violet-50 text-violet-600',
+  BODY_TRYON: 'bg-fuchsia-50 text-fuchsia-600',
+  CLOTHING_TRYON_PHOTO: 'bg-teal-50 text-teal-600',
 };
 
 const EXPERIENCE_TYPE_REQUIREMENTS: Record<string, { label: string; needs: string[]; description: string }> = {
@@ -67,6 +73,21 @@ const EXPERIENCE_TYPE_REQUIREMENTS: Record<string, { label: string; needs: strin
     label: 'QR Launch',
     needs: ['MODEL_GLB'],
     description: 'Generate QR code that launches AR experience',
+  },
+  FACE_TRYON: {
+    label: 'Face Try-On',
+    needs: ['FACE_OVERLAY_IMAGE'],
+    description: 'Virtual try-on using face tracking (eyewear, accessories)',
+  },
+  BODY_TRYON: {
+    label: 'Body Try-On',
+    needs: ['BODY_OVERLAY_MODEL'],
+    description: 'Virtual try-on using body tracking (clothing, fashion)',
+  },
+  CLOTHING_TRYON_PHOTO: {
+    label: 'Photo Try-On',
+    needs: ['GARMENT_IMAGE'],
+    description: 'Upload person photo + garment for virtual try-on preview',
   },
 };
 

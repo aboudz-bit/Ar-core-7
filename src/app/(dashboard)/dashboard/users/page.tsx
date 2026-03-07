@@ -33,6 +33,7 @@ export default function UsersPage() {
     ]).then(([usersData, companiesData]) => {
       if (usersData.success) setUsers(usersData.data);
       if (companiesData.success) setCompanies(companiesData.data.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
+    }).catch(() => {}).finally(() => {
       setLoading(false);
     });
   }, []);
@@ -90,7 +91,7 @@ export default function UsersPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center">
                           <span className="text-xs font-bold text-brand-700">
-                            {user.firstName[0]}{user.lastName[0]}
+                            {(user.firstName || '?')[0]}{(user.lastName || '?')[0]}
                           </span>
                         </div>
                         <span className="font-medium text-surface-900">{user.firstName} {user.lastName}</span>

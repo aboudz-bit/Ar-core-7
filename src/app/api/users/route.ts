@@ -11,8 +11,8 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+  const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '20')));
 
   const companyIds = isSuperAdmin(session)
     ? undefined
@@ -56,6 +56,10 @@ export async function POST(req: NextRequest) {
 
   if (!email || !password || !firstName || !lastName) {
     return NextResponse.json({ success: false, error: 'All fields are required' }, { status: 400 });
+  }
+
+  if (typeof password !== 'string' || password.length < 8) {
+    return NextResponse.json({ success: false, error: 'Password must be at least 8 characters' }, { status: 400 });
   }
 
   const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });

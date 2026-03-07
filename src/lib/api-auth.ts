@@ -33,8 +33,8 @@ export async function validateApiKey(req: NextRequest): Promise<ApiKeyContext | 
 
   if (!apiKey || !apiKey.company.isActive) return null;
 
-  // Update lastUsedAt (fire and forget)
-  prisma.apiKey.update({
+  // Update lastUsedAt (fire and forget — void to signal intentional no-await)
+  void prisma.apiKey.update({
     where: { id: apiKey.id },
     data: { lastUsedAt: new Date() },
   }).catch(() => {});

@@ -10,7 +10,7 @@ export async function GET(
   const slug = params.slug;
 
   const products = await prisma.product.findMany({
-    where: { status: 'ACTIVE' },
+    where: { status: { in: ['ACTIVE', 'AR_READY', 'IMAGE_ONLY'] } },
     include: {
       company: { select: { id: true, name: true, slug: true } },
       assets: { select: { assetType: true, filePath: true, fileName: true } },

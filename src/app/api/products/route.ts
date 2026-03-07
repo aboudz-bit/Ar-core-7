@@ -10,19 +10,28 @@ export async function GET(req: NextRequest) {
   if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
-  const page = parseInt(searchParams.get('page') || '1');
-  const limit = parseInt(searchParams.get('limit') || '20');
+  const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') || '20')));
   const search = searchParams.get('search') || '';
   const companyId = searchParams.get('companyId') || '';
   const status = searchParams.get('status') || '';
 
-  const companyIds = isSuperAdmin(session)
+  const userCompanyIds = isSuperAdmin(session)
     ? undefined
     : session.memberships.map((m) => m.companyId);
 
+  // If companyId filter is specified, validate the user has access to it
+  if (companyId && !isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  // Build tenant-safe filter: companyId param narrows within allowed companies
+  const effectiveCompanyFilter = companyId
+    ? { companyId }
+    : userCompanyIds ? { companyId: { in: userCompanyIds } } : {};
+
   const where = {
-    ...(companyIds ? { companyId: { in: companyIds } } : {}),
-    ...(companyId ? { companyId } : {}),
+    ...effectiveCompanyFilter,
     ...(status ? { status: status as 'DRAFT' | 'ACTIVE' | 'ARCHIVED' } : {}),
     ...(search
       ? {

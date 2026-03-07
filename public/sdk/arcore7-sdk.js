@@ -193,6 +193,78 @@
     },
 
     /**
+     * Launch a face try-on experience by experience slug.
+     *
+     * @param {Object} opts
+     * @param {string} opts.experienceSlug - Experience slug
+     * @param {string} [opts.apiBase] - Base URL
+     * @param {boolean} [opts.newTab=false] - Force new tab
+     */
+    launchTryOn: function (opts) {
+      if (!opts || !opts.experienceSlug) {
+        console.error('[ARCore7] experienceSlug is required');
+        return;
+      }
+
+      var base = resolveBase(opts);
+      var url = base + '/tryon/' + encodeURIComponent(opts.experienceSlug);
+
+      if (opts.newTab || !isMobile()) {
+        window.open(url, '_blank');
+      } else {
+        window.location.href = url;
+      }
+    },
+
+    /**
+     * Launch a body tracking experience by experience slug.
+     *
+     * @param {Object} opts
+     * @param {string} opts.experienceSlug - Experience slug
+     * @param {string} [opts.apiBase] - Base URL
+     * @param {boolean} [opts.newTab=false] - Force new tab
+     */
+    launchBodyTracking: function (opts) {
+      if (!opts || !opts.experienceSlug) {
+        console.error('[ARCore7] experienceSlug is required');
+        return;
+      }
+
+      var base = resolveBase(opts);
+      var url = base + '/body/' + encodeURIComponent(opts.experienceSlug);
+
+      if (opts.newTab || !isMobile()) {
+        window.open(url, '_blank');
+      } else {
+        window.location.href = url;
+      }
+    },
+
+    /**
+     * Launch a photo-based virtual try-on (clothing) experience.
+     *
+     * @param {Object} opts
+     * @param {string} opts.experienceSlug - Experience slug
+     * @param {string} [opts.apiBase] - Base URL
+     * @param {boolean} [opts.newTab=true] - Force new tab (default true since it has upload flow)
+     */
+    launchVirtualFit: function (opts) {
+      if (!opts || !opts.experienceSlug) {
+        console.error('[ARCore7] experienceSlug is required');
+        return;
+      }
+
+      var base = resolveBase(opts);
+      var url = base + '/virtual-fit/' + encodeURIComponent(opts.experienceSlug);
+
+      if (opts.newTab !== false) {
+        window.open(url, '_blank');
+      } else {
+        window.location.href = url;
+      }
+    },
+
+    /**
      * Fetch product data from the public API.
      *
      * @param {Object} opts

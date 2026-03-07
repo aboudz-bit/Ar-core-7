@@ -237,7 +237,12 @@ function createPizzaGlb(companyId: string, productId: string, fileName: string, 
 async function main() {
   console.log('Seeding AR-core-7 database...');
 
-  // Clean existing data
+  // Clean existing data (order matters due to foreign key constraints)
+  await prisma.imageTo3DJob.deleteMany();
+  await prisma.modelOptimizationJob.deleteMany();
+  await prisma.webhookDelivery.deleteMany();
+  await prisma.webhook.deleteMany();
+  await prisma.qRCode.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.analyticsEvent.deleteMany();
   await prisma.publishRecord.deleteMany();
@@ -246,6 +251,7 @@ async function main() {
   await prisma.product.deleteMany();
   await prisma.setting.deleteMany();
   await prisma.membership.deleteMany();
+  await prisma.apiKey.deleteMany();
   await prisma.company.deleteMany();
   await prisma.user.deleteMany();
 
@@ -907,6 +913,401 @@ async function main() {
   console.log('  Products: Margherita Pizza, Pepperoni Pizza');
   console.log('  Routes: /demo, /launch/margherita, /launch/pepperoni');
 
+  // ============================================================
+  // Image-to-3D Pipeline Test Products
+  // These products have IMAGE_ONLY status to test the automated pipeline
+  // ============================================================
+  console.log('Creating Image-to-3D test products...');
+
+  const steakHouse = await prisma.company.create({
+    data: {
+      name: 'Steak House Al Khobar Premium',
+      slug: 'steak-house-alkhobar',
+      brandPrimary: '#c0392b',
+      brandSecondary: '#e74c3c',
+      domain: 'steakhouse-alkhobar.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: steakHouse.id, role: 'SUPER_ADMIN' },
+  });
+
+  const abayaBoutique = await prisma.company.create({
+    data: {
+      name: 'Noor Abaya Boutique',
+      slug: 'noor-abaya',
+      brandPrimary: '#1a1a2e',
+      brandSecondary: '#16213e',
+      domain: 'noorabaya.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: abayaBoutique.id, role: 'SUPER_ADMIN' },
+  });
+
+  // Wagyu Steak — IMAGE_ONLY (ready for image-to-3D pipeline)
+  const wagyuSteak = await prisma.product.create({
+    data: {
+      companyId: steakHouse.id,
+      title: 'Wagyu Steak',
+      sku: 'SH-WGY-001',
+      category: 'Steak',
+      description: 'Dry-aged A5 Japanese wagyu ribeye, charcoal-grilled to perfection with truffle butter and seasonal vegetables.',
+      brand: 'Steak House Premium',
+      status: 'IMAGE_ONLY',
+      tags: ['wagyu', 'steak', 'premium', 'japanese'],
+      scalePreset: 0.3,
+      anchorType: 'table',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const wagyuImagePath = createPlaceholderImage(steakHouse.id, wagyuSteak.id, 'wagyu-steak.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: wagyuSteak.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'wagyu-steak.jpg',
+      filePath: wagyuImagePath,
+      fileSize: 250000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: wagyuSteak.id },
+    data: { thumbnailUrl: wagyuImagePath },
+  });
+
+  // Tomahawk Steak — IMAGE_ONLY
+  const tomahawkSteak = await prisma.product.create({
+    data: {
+      companyId: steakHouse.id,
+      title: 'Tomahawk Steak',
+      sku: 'SH-TMH-001',
+      category: 'Steak',
+      description: '1.2kg bone-in tomahawk ribeye, wood-fired and served with roasted garlic, bone marrow, and peppercorn sauce.',
+      brand: 'Steak House Premium',
+      status: 'IMAGE_ONLY',
+      tags: ['tomahawk', 'steak', 'bone-in', 'premium'],
+      scalePreset: 0.35,
+      anchorType: 'table',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const tomahawkImagePath = createPlaceholderImage(steakHouse.id, tomahawkSteak.id, 'tomahawk-steak.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: tomahawkSteak.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'tomahawk-steak.jpg',
+      filePath: tomahawkImagePath,
+      fileSize: 280000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: tomahawkSteak.id },
+    data: { thumbnailUrl: tomahawkImagePath },
+  });
+
+  // Black Abaya — IMAGE_ONLY
+  const blackAbaya = await prisma.product.create({
+    data: {
+      companyId: abayaBoutique.id,
+      title: 'Black Abaya',
+      sku: 'NA-BLK-001',
+      category: 'Abaya',
+      description: 'Elegant black abaya with intricate embroidery and flowing silhouette. Premium crepe fabric with hand-stitched details.',
+      brand: 'Noor Couture',
+      status: 'IMAGE_ONLY',
+      tags: ['abaya', 'black', 'embroidery', 'premium'],
+      scalePreset: 1.0,
+      anchorType: 'floor',
+      assetCompletenessScore: 15,
+    },
+  });
+
+  const abayaImagePath = createPlaceholderImage(abayaBoutique.id, blackAbaya.id, 'black-abaya.jpg');
+  await prisma.productAsset.create({
+    data: {
+      productId: blackAbaya.id,
+      assetType: 'IMAGE_2D',
+      fileName: 'black-abaya.jpg',
+      filePath: abayaImagePath,
+      fileSize: 320000,
+      mimeType: 'image/jpeg',
+    },
+  });
+  await prisma.product.update({
+    where: { id: blackAbaya.id },
+    data: { thumbnailUrl: abayaImagePath },
+  });
+
+  console.log('Image-to-3D test products created!');
+  console.log('  Wagyu Steak (IMAGE_ONLY) — ready for pipeline');
+  console.log('  Tomahawk Steak (IMAGE_ONLY) — ready for pipeline');
+  console.log('  Black Abaya (IMAGE_ONLY) — ready for pipeline');
+
+  // ============================================================
+  // Face Try-On Module — Eyewear test products
+  // ============================================================
+  console.log('Creating Face Try-On test products...');
+
+  const eyewearBrand = await prisma.company.create({
+    data: {
+      name: 'Optica Eyewear',
+      slug: 'optica-eyewear',
+      brandPrimary: '#7c3aed',
+      brandSecondary: '#a78bfa',
+      domain: 'optica-eyewear.com',
+    },
+  });
+
+  await prisma.membership.create({
+    data: { userId: superAdmin.id, companyId: eyewearBrand.id, role: 'SUPER_ADMIN' },
+  });
+
+  // Aviator Sunglasses — FACE_TRYON
+  const aviatorGlasses = await prisma.product.create({
+    data: {
+      companyId: eyewearBrand.id,
+      title: 'Aviator Sunglasses Classic',
+      sku: 'OPT-AVT-001',
+      category: 'Eyewear',
+      description: 'Classic aviator sunglasses with polarized lenses and gold-tone metal frame. UV400 protection.',
+      brand: 'Optica',
+      status: 'ACTIVE',
+      tags: ['sunglasses', 'aviator', 'polarized', 'classic'],
+      scalePreset: 1.0,
+      anchorType: 'face',
+      assetCompletenessScore: 80,
+    },
+  });
+
+  const aviatorOverlayPath = createPlaceholderImage(eyewearBrand.id, aviatorGlasses.id, 'aviator-overlay.png');
+  const aviatorThumbnailPath = createPlaceholderImage(eyewearBrand.id, aviatorGlasses.id, 'aviator-thumbnail.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: aviatorGlasses.id,
+        assetType: 'FACE_OVERLAY_IMAGE',
+        fileName: 'aviator-overlay.png',
+        filePath: aviatorOverlayPath,
+        fileSize: 45000,
+        mimeType: 'image/png',
+        metadata: { placement: 'GLASSES', offsetY: 0 },
+      },
+      {
+        productId: aviatorGlasses.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'aviator-thumbnail.png',
+        filePath: aviatorThumbnailPath,
+        fileSize: 30000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  await prisma.product.update({
+    where: { id: aviatorGlasses.id },
+    data: { thumbnailUrl: aviatorThumbnailPath },
+  });
+
+  // Cat-Eye Frames — FACE_TRYON
+  const catEyeFrames = await prisma.product.create({
+    data: {
+      companyId: eyewearBrand.id,
+      title: 'Cat Eye Fashion Frames',
+      sku: 'OPT-CAT-001',
+      category: 'Eyewear',
+      description: 'Retro cat-eye frames with acetate construction. Available with prescription or clear lenses.',
+      brand: 'Optica',
+      status: 'ACTIVE',
+      tags: ['glasses', 'cat-eye', 'retro', 'fashion'],
+      scalePreset: 1.0,
+      anchorType: 'face',
+      assetCompletenessScore: 80,
+    },
+  });
+
+  const catEyeOverlayPath = createPlaceholderImage(eyewearBrand.id, catEyeFrames.id, 'cateye-overlay.png');
+  const catEyeThumbnailPath = createPlaceholderImage(eyewearBrand.id, catEyeFrames.id, 'cateye-thumbnail.png');
+
+  await prisma.productAsset.createMany({
+    data: [
+      {
+        productId: catEyeFrames.id,
+        assetType: 'FACE_OVERLAY_IMAGE',
+        fileName: 'cateye-overlay.png',
+        filePath: catEyeOverlayPath,
+        fileSize: 42000,
+        mimeType: 'image/png',
+        metadata: { placement: 'GLASSES', offsetY: 0 },
+      },
+      {
+        productId: catEyeFrames.id,
+        assetType: 'THUMBNAIL',
+        fileName: 'cateye-thumbnail.png',
+        filePath: catEyeThumbnailPath,
+        fileSize: 28000,
+        mimeType: 'image/png',
+      },
+    ],
+  });
+
+  await prisma.product.update({
+    where: { id: catEyeFrames.id },
+    data: { thumbnailUrl: catEyeThumbnailPath },
+  });
+
+  // Create FACE_TRYON experiences
+  const aviatorTryOn = await prisma.experience.create({
+    data: {
+      companyId: eyewearBrand.id,
+      productId: aviatorGlasses.id,
+      name: 'Aviator Virtual Try-On',
+      slug: 'optica-aviator-tryon',
+      experienceType: 'FACE_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'transparent',
+      ctaText: 'Buy Now',
+      ctaLink: 'https://optica-eyewear.com/aviator',
+      sceneConfig: { placementMode: 'GLASSES' },
+      analyticsEnabled: true,
+    },
+  });
+
+  const catEyeTryOn = await prisma.experience.create({
+    data: {
+      companyId: eyewearBrand.id,
+      productId: catEyeFrames.id,
+      name: 'Cat Eye Virtual Try-On',
+      slug: 'optica-cateye-tryon',
+      experienceType: 'FACE_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'transparent',
+      ctaText: 'Buy Now',
+      ctaLink: 'https://optica-eyewear.com/cateye',
+      sceneConfig: { placementMode: 'GLASSES' },
+      analyticsEnabled: true,
+    },
+  });
+
+  await prisma.publishRecord.createMany({
+    data: [
+      {
+        experienceId: aviatorTryOn.id,
+        companyId: eyewearBrand.id,
+        publishStatus: 'PUBLISHED',
+        publicUrl: 'http://localhost:3000/tryon/optica-aviator-tryon',
+        publishedAt: new Date(),
+        publishedBy: superAdmin.id,
+      },
+      {
+        experienceId: catEyeTryOn.id,
+        companyId: eyewearBrand.id,
+        publishStatus: 'PUBLISHED',
+        publicUrl: 'http://localhost:3000/tryon/optica-cateye-tryon',
+        publishedAt: new Date(),
+        publishedBy: superAdmin.id,
+      },
+    ],
+  });
+
+  console.log('Face Try-On test products created!');
+  console.log('  Aviator Sunglasses (FACE_TRYON) — /tryon/optica-aviator-tryon');
+  console.log('  Cat Eye Frames (FACE_TRYON) — /tryon/optica-cateye-tryon');
+
+  // ============================================================
+  // Body Tracking Demo — Noor Abaya Boutique
+  // ============================================================
+  console.log('Creating Body Tracking demo...');
+
+  const bodyTrackingDemo = await prisma.experience.create({
+    data: {
+      companyId: abayaBoutique.id,
+      productId: blackAbaya.id,
+      name: 'Abaya Body Tracking Demo',
+      slug: 'noor-body-tracking-demo',
+      experienceType: 'BODY_TRYON',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'natural',
+      backgroundMode: 'camera',
+      ctaText: 'Shop Now',
+      ctaLink: 'https://noorabaya.com/black-abaya',
+      sceneConfig: { placementMode: 'BODY' },
+      analyticsEnabled: true,
+    },
+  });
+
+  await prisma.publishRecord.create({
+    data: {
+      experienceId: bodyTrackingDemo.id,
+      companyId: abayaBoutique.id,
+      publishStatus: 'PUBLISHED',
+      publicUrl: 'http://localhost:3000/body/noor-body-tracking-demo',
+      publishedAt: new Date(),
+      publishedBy: superAdmin.id,
+    },
+  });
+
+  console.log('  Body Tracking Demo (BODY_TRYON) — /body/noor-body-tracking-demo');
+
+  // ============================================================
+  // Clothing Try-On Photo Demo — Noor Abaya Boutique
+  // ============================================================
+  console.log('Creating Clothing Try-On Photo demo...');
+
+  const garmentImagePath = createPlaceholderImage(abayaBoutique.id, blackAbaya.id, 'black-abaya-garment.png');
+
+  const clothingTryOnDemo = await prisma.experience.create({
+    data: {
+      companyId: abayaBoutique.id,
+      productId: blackAbaya.id,
+      name: 'Abaya Virtual Fit Demo',
+      slug: 'noor-virtual-fit-demo',
+      experienceType: 'CLOTHING_TRYON_PHOTO',
+      publishStatus: 'PUBLISHED',
+      lightingPreset: 'studio',
+      backgroundMode: 'white',
+      ctaText: 'Buy This Abaya',
+      ctaLink: 'https://noorabaya.com/black-abaya',
+      sceneConfig: { placementMode: 'CLOTHING' },
+      analyticsEnabled: true,
+    },
+  });
+
+  // Add garment image asset for the clothing try-on experience
+  await prisma.productAsset.create({
+    data: {
+      productId: blackAbaya.id,
+      assetType: 'GARMENT_IMAGE',
+      fileName: 'black-abaya-garment.png',
+      filePath: garmentImagePath,
+      fileSize: 450000,
+      mimeType: 'image/png',
+    },
+  });
+
+  await prisma.publishRecord.create({
+    data: {
+      experienceId: clothingTryOnDemo.id,
+      companyId: abayaBoutique.id,
+      publishStatus: 'PUBLISHED',
+      publicUrl: 'http://localhost:3000/virtual-fit/noor-virtual-fit-demo',
+      publishedAt: new Date(),
+      publishedBy: superAdmin.id,
+    },
+  });
+
+  console.log('  Clothing Try-On Photo (CLOTHING_TRYON_PHOTO) — /virtual-fit/noor-virtual-fit-demo');
+
   console.log('Seed complete!');
   console.log('');
   console.log('Demo credentials:');
@@ -920,10 +1321,12 @@ async function main() {
   console.log('  Chronograph Watch Elite (Luxe Brands) — GLB + Thumbnail = 50%');
   console.log('  Wireless ANC Headphones (TechGear Pro) — GLB = 30%');
   console.log('');
-  console.log(`Companies: ${3}`);
-  console.log(`Products: ${7}`);
-  console.log(`Experiences: ${6}`);
-  console.log(`Product Assets: ${9}`);
+  console.log('Try-On experiences:');
+  console.log('  Aviator Virtual Try-On — /tryon/optica-aviator-tryon');
+  console.log('  Cat Eye Virtual Try-On — /tryon/optica-cateye-tryon');
+  console.log('  Body Tracking Demo — /body/noor-body-tracking-demo');
+  console.log('  Virtual Fit Demo — /virtual-fit/noor-virtual-fit-demo');
+  console.log('');
   console.log(`Analytics events: ${analyticsData.length}`);
 }
 

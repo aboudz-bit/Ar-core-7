@@ -13,6 +13,32 @@ const nextConfig = {
     ],
   },
   headers: async () => [
+    // Global security headers for all routes
+    {
+      source: '/(.*)',
+      headers: [
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-DNS-Prefetch-Control', value: 'on' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), xr-spatial-tracking=(self)' },
+        { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+      ],
+    },
+    // Dashboard and main app: restrict framing
+    {
+      source: '/dashboard/:path*',
+      headers: [
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
+      ],
+    },
+    {
+      source: '/login',
+      headers: [
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Content-Security-Policy', value: "frame-ancestors 'none';" },
+      ],
+    },
     {
       source: '/viewer/:path*',
       headers: [
@@ -25,6 +51,26 @@ const nextConfig = {
       headers: [
         { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      ],
+    },
+    {
+      source: '/tryon/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      ],
+    },
+    {
+      source: '/body/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
+      ],
+    },
+    {
+      source: '/virtual-fit/:path*',
+      headers: [
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
       ],
     },
     {
@@ -61,6 +107,7 @@ const nextConfig = {
       source: '/uploads/:path*',
       headers: [
         { key: 'Cache-Control', value: 'public, max-age=604800, stale-while-revalidate=86400' },
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
       ],
     },
   ],

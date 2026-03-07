@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getSession, isSuperAdmin } from '@/lib/auth';
-import { saveFile, validateFileSize, resolveAssetType, isAllowedExtension, buildProductPath } from '@/lib/storage';
+import { saveFile, validateFileSize, resolveAssetType, isAllowedExtension, isAllowedFile, buildProductPath } from '@/lib/storage';
 import { logAudit } from '@/lib/audit';
 import { calculateCompletenessScore } from '@/lib/utils';
 import { queueModelOptimization } from '@/lib/model-pipeline';
 import { dispatchWebhook } from '@/lib/webhooks';
+import { queueImageTo3DJob, getImageTo3DConfig } from '@/lib/image-to-3d';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,8 +49,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'File and productId are required' }, { status: 400 });
   }
 
-  // Validate file extension
-  if (!isAllowedExtension(file.name)) {
+  // Validate file extension and MIME type
+  if (!isAllowedFile(file.name, file.type)) {
     return NextResponse.json({
       success: false,
       error: `File type not allowed. Supported: GLB, GLTF, USDZ, JPG, PNG, WebP, SVG`,
@@ -135,6 +136,29 @@ export async function POST(req: NextRequest) {
     assetType: resolvedType,
     fileSize: file.size,
   }).catch(() => {});
+
+  // Auto-trigger image-to-3D generation if enabled and this is an image upload
+  // with no existing 3D model on the product
+  if (['IMAGE_2D', 'THUMBNAIL'].includes(resolvedType)) {
+    const i3dConfig = getImageTo3DConfig();
+    if (i3dConfig.enabled) {
+      const hasModel = allAssets.some((a) => a.assetType === 'MODEL_GLB');
+      if (!hasModel) {
+        queueImageTo3DJob(product.id, product.companyId, asset.id, filePath).catch((err) => {
+          console.error('Auto image-to-3D generation failed:', err);
+        });
+
+        // Update product status to IMAGE_ONLY if still DRAFT
+        const currentProduct = await prisma.product.findUnique({ where: { id: productId } });
+        if (currentProduct && currentProduct.status === 'DRAFT') {
+          await prisma.product.update({
+            where: { id: productId },
+            data: { status: 'IMAGE_ONLY' },
+          });
+        }
+      }
+    }
+  }
 
   return NextResponse.json({ success: true, data: asset }, { status: 201 });
 }

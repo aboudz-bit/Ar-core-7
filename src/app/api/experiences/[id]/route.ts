@@ -40,10 +40,25 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
-  const body = await req.json();
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  // Whitelist allowed fields to prevent mass assignment
+  const allowedFields = ['name', 'productId', 'scale', 'initialRotationX', 'initialRotationY', 'initialRotationZ',
+    'positionOffsetX', 'positionOffsetY', 'positionOffsetZ', 'lightingPreset', 'backgroundMode',
+    'ctaText', 'ctaLink', 'analyticsEnabled', 'sceneConfig'] as const;
+  const data: Record<string, unknown> = {};
+  for (const key of allowedFields) {
+    if (key in body) data[key] = body[key];
+  }
+
   const updated = await prisma.experience.update({
     where: { id: params.id },
-    data: body,
+    data,
     include: {
       company: { select: { id: true, name: true, slug: true } },
       product: { select: { id: true, title: true } },
@@ -56,7 +71,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     action: 'UPDATE',
     entity: 'Experience',
     entityId: experience.id,
-    details: body,
+    details: { updatedFields: Object.keys(data) },
   });
 
   return NextResponse.json({ success: true, data: updated });

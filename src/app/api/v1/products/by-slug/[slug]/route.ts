@@ -13,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: { slug: string
   if (rateLimitError) return rateLimitError;
 
   const products = await prisma.product.findMany({
-    where: { companyId: context.companyId, status: 'ACTIVE' },
+    where: { companyId: context.companyId, status: { in: ['ACTIVE', 'AR_READY'] } },
     include: {
       company: { select: { id: true, name: true, slug: true, brandPrimary: true, logoUrl: true } },
       assets: { select: { assetType: true, filePath: true, fileName: true, fileSize: true } },

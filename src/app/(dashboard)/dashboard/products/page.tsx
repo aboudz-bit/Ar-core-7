@@ -48,7 +48,9 @@ export default function ProductsPage() {
       fetch('/api/companies').then((r) => r.json()).then((d) => {
         if (d.success) setCompanies(d.data.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
       }),
-    ]);
+    ]).catch(() => {
+      setLoading(false);
+    });
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
