@@ -11,6 +11,7 @@
 import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
+import { computeBodyMeasurements, type BodyMeasurements } from '@/services/body/body-measurements';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -20,6 +21,8 @@ export interface CreateTryOnJobInput {
   personImagePath: string;
   garmentImagePath: string;
   provider?: string;
+  /** Optional body landmarks (normalized 0–1) for measurement-based placement */
+  bodyLandmarks?: Array<{ x: number; y: number; z: number; visibility: number }>;
 }
 
 export interface TryOnJobResult {
@@ -39,6 +42,7 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
       garmentImagePath: input.garmentImagePath,
       provider: input.provider || 'internal',
       status: 'UPLOADED',
+      metadata: input.bodyLandmarks ? { bodyLandmarks: input.bodyLandmarks } : undefined,
     },
   });
 
@@ -84,8 +88,36 @@ async function processTryOnJob(jobId: string) {
     const pW = Math.max(personMeta.width || 800, 100);
     const pH = Math.max(personMeta.height || 1000, 100);
 
-    const garmentW = Math.max(Math.round(pW * 0.6), 60);
-    const garmentH = Math.max(Math.round(pH * 0.35), 35);
+    // Try measurement-based placement if landmarks are stored in metadata
+    const storedLandmarks = (job.metadata as Record<string, unknown> | null)?.bodyLandmarks as
+      Array<{ x: number; y: number; z: number; visibility: number }> | undefined;
+
+    const bodyMeasurements = storedLandmarks
+      ? computeBodyMeasurements(storedLandmarks, pW, pH)
+      : null;
+
+    let garmentW: number;
+    let garmentH: number;
+    let overlayLeft: number;
+    let overlayTop: number;
+
+    if (bodyMeasurements) {
+      // SMART PLACEMENT: scale and position based on body measurements
+      garmentW = Math.max(Math.round(bodyMeasurements.shoulderWidthPx * 1.2), 60);
+      garmentH = Math.max(Math.round(bodyMeasurements.torsoHeightPx * 1.3), 35);
+      overlayLeft = Math.round(bodyMeasurements.chestCenterXPx - garmentW / 2);
+      overlayTop = Math.round(bodyMeasurements.chestCenterYPx + bodyMeasurements.torsoHeightPx * 0.35 - garmentH / 2);
+    } else {
+      // FALLBACK: fixed proportional placement (original behavior)
+      garmentW = Math.max(Math.round(pW * 0.6), 60);
+      garmentH = Math.max(Math.round(pH * 0.35), 35);
+      overlayLeft = Math.round((pW - garmentW) / 2);
+      overlayTop = Math.round(pH * 0.25);
+    }
+
+    // Clamp to image bounds
+    overlayLeft = Math.max(0, Math.min(overlayLeft, pW - garmentW));
+    overlayTop = Math.max(0, Math.min(overlayTop, pH - garmentH));
 
     const garmentResized = await sharp(job.garmentImagePath)
       .resize({
@@ -98,11 +130,8 @@ async function processTryOnJob(jobId: string) {
       .toBuffer();
 
     const garmentMeta = await sharp(garmentResized).metadata();
-    const gW = garmentMeta.width || Math.round(pW * 0.6);
-    const gH = garmentMeta.height || Math.round(pH * 0.35);
-
-    const overlayLeft = Math.round((pW - gW) / 2);
-    const overlayTop = Math.round(pH * 0.25);
+    const gW = garmentMeta.width || garmentW;
+    const gH = garmentMeta.height || garmentH;
 
     const outputDir = path.join(process.cwd(), 'public', 'uploads', 'tryon-output');
     await mkdir(outputDir, { recursive: true });
@@ -135,7 +164,15 @@ async function processTryOnJob(jobId: string) {
           outputWidth: pW,
           outputHeight: pH,
           method: 'sharp-composite',
-          note: 'Image compositing overlay — not AI-based virtual try-on. Garment is overlaid on person photo.',
+          placementMethod: bodyMeasurements ? 'body-measurements' : 'fixed-proportional',
+          ...(bodyMeasurements && {
+            shoulderWidthPx: bodyMeasurements.shoulderWidthPx,
+            torsoHeightPx: bodyMeasurements.torsoHeightPx,
+            confidence: bodyMeasurements.confidence,
+          }),
+          note: bodyMeasurements
+            ? 'Garment placed using body measurement landmarks for adaptive sizing and positioning.'
+            : 'Image compositing overlay — not AI-based virtual try-on. Garment is overlaid on person photo.',
         },
       },
     });

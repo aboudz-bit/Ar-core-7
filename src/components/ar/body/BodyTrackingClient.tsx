@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { X, AlertTriangle, Loader2, Eye, EyeOff, Tags, SwitchCamera } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import { X, AlertTriangle, Loader2, Eye, EyeOff, Tags, SwitchCamera, Ruler } from 'lucide-react';
 import { BodyTracker, useBodyCamera } from './BodyTracker';
 import { BodySkeletonRenderer } from './BodySkeletonRenderer';
 import type { BodyTrackingResult } from './BodyTracker';
+import { computeBodyMeasurements, type BodyMeasurements } from '@/services/body/body-measurements';
 
 interface BodyTrackingClientProps {
   experience: {
@@ -42,6 +43,8 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
   const [trackingEnabled, setTrackingEnabled] = useState(false);
   const [showDots, setShowDots] = useState(true);
   const [showLabels, setShowLabels] = useState(false);
+  const [showMeasurements, setShowMeasurements] = useState(false);
+  const [measurements, setMeasurements] = useState<BodyMeasurements | null>(null);
 
   // Track analytics
   useEffect(() => {
@@ -77,6 +80,14 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
 
   const handleTrackingResults = useCallback((result: BodyTrackingResult | null) => {
     setTrackingResult(result);
+    if (result?.landmarks) {
+      const canvas = canvasRef.current;
+      const cw = canvas?.width || 640;
+      const ch = canvas?.height || 480;
+      setMeasurements(computeBodyMeasurements(result.landmarks, cw, ch));
+    } else {
+      setMeasurements(null);
+    }
   }, []);
 
   const handleClose = useCallback(() => {
@@ -182,6 +193,16 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
           Labels
         </button>
         <button
+          data-testid="button-toggle-measurements"
+          onClick={() => setShowMeasurements((v) => !v)}
+          className={`h-11 px-4 rounded-full backdrop-blur-md border flex items-center justify-center text-xs font-medium gap-1.5 ${
+            showMeasurements ? 'bg-white/20 text-white border-white/30' : 'bg-white/5 text-white/50 border-white/10'
+          }`}
+        >
+          <Ruler className="w-3.5 h-3.5" />
+          Measures
+        </button>
+        <button
           data-testid="button-switch-camera"
           onClick={switchCamera}
           className="w-11 h-11 rounded-full bg-white/10 backdrop-blur-md text-white border border-white/20 flex items-center justify-center"
@@ -190,6 +211,19 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
           <SwitchCamera className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Body Measurements debug overlay */}
+      {showMeasurements && measurements && (
+        <div className="absolute top-16 left-4 z-50 p-3 rounded-xl bg-black/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-mono leading-relaxed min-w-[200px]">
+          <p className="text-white/60 font-semibold mb-1 text-xs">Body Measurements</p>
+          <p>Shoulders: <span className="text-cyan-300">{measurements.shoulderWidthPx.toFixed(0)}px</span> <span className="text-white/40">({(measurements.shoulderWidth * 100).toFixed(1)}%)</span></p>
+          <p>Hips: <span className="text-cyan-300">{measurements.hipWidthPx.toFixed(0)}px</span> <span className="text-white/40">({(measurements.hipWidth * 100).toFixed(1)}%)</span></p>
+          <p>Torso H: <span className="text-cyan-300">{measurements.torsoHeightPx.toFixed(0)}px</span> <span className="text-white/40">({(measurements.torsoHeight * 100).toFixed(1)}%)</span></p>
+          <p>Arm L: <span className="text-cyan-300">{measurements.armLengthPx.toFixed(0)}px</span> <span className="text-white/40">({(measurements.armLength * 100).toFixed(1)}%)</span></p>
+          <p>Chest: <span className="text-cyan-300">({measurements.chestCenterXPx.toFixed(0)}, {measurements.chestCenterYPx.toFixed(0)})</span></p>
+          <p>Confidence: <span className={measurements.confidence > 0.7 ? 'text-green-400' : 'text-amber-400'}>{(measurements.confidence * 100).toFixed(0)}%</span></p>
+        </div>
+      )}
 
       {/* Bottom info bar */}
       <div className="absolute bottom-0 left-0 right-0 z-50 p-4 bg-gradient-to-t from-black/85 to-transparent">
