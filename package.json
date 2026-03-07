@@ -19,6 +19,7 @@
     "@google/model-viewer": "^3.5.0",
     "@octokit/rest": "^21.1.1",
     "@prisma/client": "^5.22.0",
+    "@replit/connectors-sdk": "^0.2.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
     "jose": "^5.10.0",
