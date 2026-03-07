@@ -16,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: { externalId: 
     where: {
       companyId: context.companyId,
       externalId: decodeURIComponent(params.externalId),
-      status: 'ACTIVE',
+      status: { in: ['ACTIVE', 'AR_READY'] },
     },
     include: {
       company: { select: { id: true, name: true, slug: true, brandPrimary: true, logoUrl: true } },

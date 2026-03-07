@@ -210,8 +210,9 @@ async function processImageTo3DJob(jobId: string): Promise<void> {
         },
       });
 
+      const productId = job2?.productId || job.productId;
       await prisma.product.update({
-        where: { id: job.productId },
+        where: { id: productId },
         data: { status: 'GENERATION_FAILED' },
       });
     }

@@ -23,7 +23,7 @@ export async function GET(_req: NextRequest, { params }: { params: { slug: strin
     return NextResponse.json({ success: false, error: 'Not found or not published' }, { status: 404 });
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   const glbAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_GLB');
   const usdzAsset = experience.product?.assets.find((a) => a.assetType === 'MODEL_USDZ');
   const posterAsset = experience.product?.assets.find((a) => a.assetType === 'POSTER');
