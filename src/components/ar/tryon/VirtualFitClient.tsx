@@ -41,6 +41,13 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus>('idle');
   const [outputImage, setOutputImage] = useState<string | null>(null);
+  const [sizeRec, setSizeRec] = useState<{
+    recommendedSize: string;
+    confidence: number;
+    fitPrediction: string;
+    alternatives: string[];
+    reasoning: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [heightCm, setHeightCm] = useState<string>('');
   const [weightKg, setWeightKg] = useState<string>('');
@@ -91,6 +98,11 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
 
         if (jobStatus === 'COMPLETE') {
           setOutputImage(data.data.outputImagePath);
+          // Extract size recommendation from job metadata
+          const meta = data.data.metadata as Record<string, unknown> | null;
+          if (meta?.sizeRecommendation) {
+            setSizeRec(meta.sizeRecommendation as typeof sizeRec);
+          }
           if (pollRef.current) clearInterval(pollRef.current);
         } else if (jobStatus === 'FAILED') {
           setError(data.data.errorMessage || 'Processing failed');
@@ -157,6 +169,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
     setJobId(null);
     setStatus('idle');
     setOutputImage(null);
+    setSizeRec(null);
     setError(null);
     setHeightCm('');
     setWeightKg('');
@@ -355,6 +368,31 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
               alt="Virtual try-on result"
               className="max-w-lg mx-auto rounded-lg shadow-lg"
             />
+            {/* Size Recommendation */}
+            {sizeRec && (
+              <div className="mt-6 mx-auto max-w-sm bg-surface-50 rounded-lg border border-surface-200 p-4 text-left">
+                <h4 className="text-sm font-semibold text-surface-800 mb-2 flex items-center gap-2">
+                  <Ruler className="w-4 h-4" /> Size Recommendation
+                </h4>
+                <div className="flex items-baseline gap-3 mb-2">
+                  <span className="text-2xl font-bold" style={{ color: company.brandPrimary }}>
+                    {sizeRec.recommendedSize}
+                  </span>
+                  <span className="text-xs text-surface-500">
+                    Confidence: {Math.round(sizeRec.confidence * 100)}%
+                  </span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-surface-200 text-surface-600 capitalize">
+                    {sizeRec.fitPrediction} fit
+                  </span>
+                </div>
+                {sizeRec.alternatives.length > 0 && (
+                  <p className="text-xs text-surface-500 mb-1">
+                    Also consider: {sizeRec.alternatives.join(', ')}
+                  </p>
+                )}
+                <p className="text-[11px] text-surface-400">{sizeRec.reasoning}</p>
+              </div>
+            )}
             <p className="text-xs text-surface-400 mt-4">
               This is an estimation-based preview. Sizing is approximate and may vary from actual product fit.
             </p>

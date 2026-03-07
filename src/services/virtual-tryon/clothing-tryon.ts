@@ -14,6 +14,7 @@ import { writeFile, mkdir } from 'fs/promises';
 import { computeBodyMeasurements, enhanceWithProfile, type BodyProfile } from '@/services/body/body-measurements';
 import { generateOcclusionMask, renderOcclusionSVG } from './body-mask';
 import { warpGarment } from './cloth-warp';
+import { recommendSize, type SizeRecommendation } from '@/services/size-recommendation/size-engine';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -279,6 +280,21 @@ async function processTryOnJob(jobId: string) {
 
     const processingTime = Date.now() - startTime;
 
+    // --- SIZE RECOMMENDATION ---
+    // Generate a size recommendation if we have any useful data
+    let sizeRecommendation: SizeRecommendation | null = null;
+    try {
+      sizeRecommendation = recommendSize({
+        bodyMeasurements: bodyMeasurements || undefined,
+        userProfile: storedProfile
+          ? { heightCm: storedProfile.heightCm, weightKg: storedProfile.weightKg, usualSize: storedProfile.usualSize }
+          : undefined,
+        garmentMetadata: undefined, // No garment size chart yet — uses fallback strategies
+      });
+    } catch (sizeErr) {
+      console.warn(`[TryOnJob ${jobId}] Size recommendation failed:`, sizeErr);
+    }
+
     await prisma.tryOnJob.update({
       where: { id: jobId },
       data: {
@@ -304,6 +320,7 @@ async function processTryOnJob(jobId: string) {
           }),
           clothWarp: warpApplied,
           occlusionMask: occlusionApplied,
+          ...(sizeRecommendation && { sizeRecommendation: JSON.parse(JSON.stringify(sizeRecommendation)) }),
           note: 'Estimation-based compositing with section-geometric cloth warping and landmark-polygon occlusion masking — not AI deformation or pixel-accurate segmentation. Results are approximate.',
         },
       },
