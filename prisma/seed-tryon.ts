@@ -56,6 +56,27 @@ async function main() {
     console.log('  Experience optica-aviator-tryon already exists, skipping');
   }
 
+  const existingOverlay = await prisma.productAsset.findFirst({
+    where: { productId: aviatorProduct.id, assetType: 'FACE_OVERLAY_IMAGE' },
+  });
+  if (!existingOverlay) {
+    await prisma.productAsset.create({
+      data: {
+        productId: aviatorProduct.id,
+        assetType: 'FACE_OVERLAY_IMAGE',
+        fileName: 'aviator-glasses.png',
+        filePath: '/demo-assets/aviator-glasses.png',
+        fileSize: 22886,
+        mimeType: 'image/png',
+        metadata: { placement: 'GLASSES', description: 'Aviator sunglasses overlay for face try-on' },
+        source: 'manual',
+        isProcessed: true,
+        processingStatus: 'complete',
+      },
+    });
+    console.log('  Created asset: aviator-glasses.png (FACE_OVERLAY_IMAGE)');
+  }
+
   // --- 2. BODY_TRYON: Noor Body Tracking Demo (under Noor Home Decor) ---
 
   let bodyProduct = await prisma.product.findFirst({

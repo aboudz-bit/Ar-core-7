@@ -79,7 +79,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
 
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/tryon-jobs/${id}`);
+        const res = await fetch(`/api/public/tryon-jobs/${id}`);
         const data = await res.json();
         if (!data.success) return;
 
@@ -120,7 +120,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       formData.append('companyId', company.id);
       formData.append('experienceId', experience.id);
 
-      const res = await fetch('/api/tryon-jobs', {
+      const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
         body: formData,
       });

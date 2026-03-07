@@ -2,17 +2,15 @@
  * Clothing Try-On Service (Photo-based)
  *
  * Handles the async processing pipeline for photo-based virtual try-on.
- * User uploads a person photo + garment image, system generates a try-on preview.
+ * User uploads a person photo + garment image, system generates a composited preview.
  *
- * Architecture references: VITON-HD, VITON
- * - https://github.com/shadow2496/VITON-HD
- * - https://github.com/xthan/VITON
- *
- * In this phase, we implement the pipeline structure with a placeholder processor.
- * The actual ML inference can be swapped in via the `provider` field.
+ * Current implementation: Canvas-based image compositing (garment overlaid on person).
+ * Production upgrade path: VITON-HD, Fashn, or similar ML-based try-on API.
  */
 
 import { prisma } from '@/lib/prisma';
+import path from 'path';
+import { writeFile, mkdir } from 'fs/promises';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -32,9 +30,6 @@ export interface TryOnJobResult {
   metadata: Record<string, unknown> | null;
 }
 
-/**
- * Create a new try-on job and enqueue it for processing.
- */
 export async function createTryOnJob(input: CreateTryOnJobInput) {
   const job = await prisma.tryOnJob.create({
     data: {
@@ -47,7 +42,6 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
     },
   });
 
-  // Fire and forget — queue the processing
   void processTryOnJob(job.id).catch((err) => {
     console.error(`[TryOnJob ${job.id}] Processing failed:`, err);
   });
@@ -55,9 +49,6 @@ export async function createTryOnJob(input: CreateTryOnJobInput) {
   return job;
 }
 
-/**
- * Get the status and result of a try-on job.
- */
 export async function getTryOnJobStatus(jobId: string): Promise<TryOnJobResult | null> {
   const job = await prisma.tryOnJob.findUnique({
     where: { id: jobId },
@@ -74,12 +65,9 @@ export async function getTryOnJobStatus(jobId: string): Promise<TryOnJobResult |
   };
 }
 
-/**
- * Process a try-on job.
- * This is where the actual ML inference would happen.
- * Currently implements a placeholder that generates a composite preview.
- */
 async function processTryOnJob(jobId: string) {
+  const startTime = Date.now();
+
   await prisma.tryOnJob.update({
     where: { id: jobId },
     data: { status: 'PROCESSING', startedAt: new Date() },
@@ -89,51 +77,73 @@ async function processTryOnJob(jobId: string) {
     const job = await prisma.tryOnJob.findUnique({ where: { id: jobId } });
     if (!job) throw new Error('Job not found');
 
-    // In production, this would call an ML inference endpoint:
-    // - VITON-HD model API
-    // - Custom TryOn model server
-    // - Third-party virtual try-on API (e.g., Revery, Fashn)
-    //
-    // For now, we validate inputs and mark as complete with a placeholder.
-    const { createReadStream } = await import('fs');
-    const personExists = await new Promise((resolve) => {
-      const stream = createReadStream(job.personImagePath);
-      stream.on('open', () => { stream.destroy(); resolve(true); });
-      stream.on('error', () => resolve(false));
-    });
+    const sharp = (await import('sharp')).default;
 
-    if (!personExists) throw new Error('Person image not found');
+    const personImage = sharp(job.personImagePath);
+    const personMeta = await personImage.metadata();
+    const pW = Math.max(personMeta.width || 800, 100);
+    const pH = Math.max(personMeta.height || 1000, 100);
 
-    const garmentExists = await new Promise((resolve) => {
-      const stream = createReadStream(job.garmentImagePath);
-      stream.on('open', () => { stream.destroy(); resolve(true); });
-      stream.on('error', () => resolve(false));
-    });
+    const garmentW = Math.max(Math.round(pW * 0.6), 60);
+    const garmentH = Math.max(Math.round(pH * 0.35), 35);
 
-    if (!garmentExists) throw new Error('Garment image not found');
+    const garmentResized = await sharp(job.garmentImagePath)
+      .resize({
+        width: garmentW,
+        height: garmentH,
+        fit: 'contain',
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      })
+      .png()
+      .toBuffer();
 
-    // Placeholder: In production, call ML model and save output image
-    // const outputPath = await runVirtualTryOn(job.personImagePath, job.garmentImagePath);
-    //
-    // For now, we mark the job as complete with the person image as a preview stand-in.
-    // When a real model is integrated, replace this with actual output.
-    const outputPath = job.personImagePath; // Placeholder
+    const garmentMeta = await sharp(garmentResized).metadata();
+    const gW = garmentMeta.width || Math.round(pW * 0.6);
+    const gH = garmentMeta.height || Math.round(pH * 0.35);
+
+    const overlayLeft = Math.round((pW - gW) / 2);
+    const overlayTop = Math.round(pH * 0.25);
+
+    const outputDir = path.join(process.cwd(), 'public', 'uploads', 'tryon-output');
+    await mkdir(outputDir, { recursive: true });
+
+    const outputFileName = `tryon_${jobId}_${Date.now()}.png`;
+    const outputFilePath = path.join(outputDir, outputFileName);
+    const publicPath = `/uploads/tryon-output/${outputFileName}`;
+
+    await personImage
+      .composite([{
+        input: garmentResized,
+        left: overlayLeft,
+        top: overlayTop,
+        blend: 'over',
+      }])
+      .png()
+      .toFile(outputFilePath);
+
+    const processingTime = Date.now() - startTime;
 
     await prisma.tryOnJob.update({
       where: { id: jobId },
       data: {
         status: 'COMPLETE',
-        outputImagePath: outputPath,
+        outputImagePath: publicPath,
         completedAt: new Date(),
         metadata: {
-          processingTime: Date.now() - (job.startedAt?.getTime() || Date.now()),
+          processingTime,
           provider: job.provider,
-          note: 'Placeholder output — integrate ML model for real try-on results',
+          outputWidth: pW,
+          outputHeight: pH,
+          method: 'sharp-composite',
+          note: 'Image compositing overlay — not AI-based virtual try-on. Garment is overlaid on person photo.',
         },
       },
     });
+
+    console.log(`[TryOnJob ${jobId}] Completed in ${processingTime}ms — output: ${publicPath}`);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    console.error(`[TryOnJob ${jobId}] Failed:`, message);
     await prisma.tryOnJob.update({
       where: { id: jobId },
       data: {
@@ -145,9 +155,6 @@ async function processTryOnJob(jobId: string) {
   }
 }
 
-/**
- * List try-on jobs for a company.
- */
 export async function listTryOnJobs(companyId: string, limit = 20) {
   return prisma.tryOnJob.findMany({
     where: { companyId },

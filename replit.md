@@ -10,6 +10,8 @@ AR-Core-7 is a full-stack Next.js 14 platform for managing AR (Augmented Reality
 - **Styling**: Tailwind CSS
 - **State Management**: Zustand
 - **3D/AR**: Three.js, @google/model-viewer
+- **Image Processing**: sharp (compositing for virtual fit)
+- **Face/Body Tracking**: MediaPipe Face Mesh + Pose (CDN-loaded)
 
 ## Project Structure
 ```
@@ -38,19 +40,28 @@ prisma/
 - AR experience creation and publishing
 - Face try-on (FACE_TRYON) — camera + MediaPipe face tracking for eyewear/accessories overlay
 - Body tracking (BODY_TRYON) — camera + MediaPipe pose estimation with skeleton rendering
-- Virtual fit (CLOTHING_TRYON_PHOTO) — photo upload-based garment overlay (no backend processing API)
+- Virtual fit (CLOTHING_TRYON_PHOTO) — photo upload-based garment overlay with sharp compositing backend
 - Analytics tracking
 - QR code generation
 - API key management
 - Webhook support
 
 ## Try-On Routes
-- `/tryon/[experienceSlug]` — Face try-on (requires camera, loads MediaPipe face mesh)
-- `/body/[experienceSlug]` — Body tracking (requires camera, loads MediaPipe pose)
-- `/virtual-fit/[experienceSlug]` — Photo-based virtual fit (no camera needed, upload-based UI)
+- `/tryon/[experienceSlug]` — Face try-on (requires camera, loads MediaPipe face mesh, draws glasses overlay on canvas)
+- `/body/[experienceSlug]` — Body tracking (requires camera, loads MediaPipe pose, draws color-coded skeleton)
+- `/virtual-fit/[experienceSlug]` — Photo-based virtual fit (no camera needed, upload-based UI + sharp compositing)
 - Demo slugs: `optica-aviator-tryon`, `noor-body-tracking-demo`, `noor-virtual-fit-demo`
 - Data fetched by `src/lib/tryon.ts` → `getTryOnData(slug)`
 - Seed script: `prisma/seed-tryon.ts`
+- Face overlay asset: `public/demo-assets/aviator-glasses.png` (seeded as FACE_OVERLAY_IMAGE)
+
+## Virtual Fit API
+- Public API: `POST /api/public/tryon-jobs` — accepts personImage + garmentImage (multipart), creates compositing job
+- Public API: `GET /api/public/tryon-jobs/[id]` — returns job status + outputImagePath
+- Auth API: `POST /api/tryon-jobs` — same but requires session auth
+- Processing: sharp-based image compositing (garment overlaid on person photo, not AI try-on)
+- Output: `/public/uploads/tryon-output/tryon_{jobId}_{timestamp}.png`
+- Service: `src/services/virtual-tryon/clothing-tryon.ts`
 
 ## Database
 - PostgreSQL via Replit's built-in database
