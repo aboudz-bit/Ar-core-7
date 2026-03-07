@@ -237,9 +237,12 @@ function createPizzaGlb(companyId: string, productId: string, fileName: string, 
 async function main() {
   console.log('Seeding AR-core-7 database...');
 
-  // Clean existing data
+  // Clean existing data (order matters due to foreign key constraints)
   await prisma.imageTo3DJob.deleteMany();
   await prisma.modelOptimizationJob.deleteMany();
+  await prisma.webhookDelivery.deleteMany();
+  await prisma.webhook.deleteMany();
+  await prisma.qRCode.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.analyticsEvent.deleteMany();
   await prisma.publishRecord.deleteMany();
@@ -248,6 +251,7 @@ async function main() {
   await prisma.product.deleteMany();
   await prisma.setting.deleteMany();
   await prisma.membership.deleteMany();
+  await prisma.apiKey.deleteMany();
   await prisma.company.deleteMany();
   await prisma.user.deleteMany();
 

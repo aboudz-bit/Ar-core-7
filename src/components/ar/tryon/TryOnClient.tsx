@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Camera, X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
+import { X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, ExternalLink, Loader2 } from 'lucide-react';
 import { FaceTracker, useTryOnCamera } from './FaceTracker';
 import { TryOnOverlayRenderer } from './TryOnOverlayRenderer';
 import type { FaceTrackingResult } from './FaceTracker';

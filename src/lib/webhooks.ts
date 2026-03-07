@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 export type WebhookEvent =
   | 'ar_viewed'
@@ -146,5 +146,9 @@ export function verifyWebhookSignature(
   secret: string
 ): boolean {
   const expected = signPayload(payload, secret);
-  return expected === signature;
+  try {
+    return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  } catch {
+    return false;
+  }
 }

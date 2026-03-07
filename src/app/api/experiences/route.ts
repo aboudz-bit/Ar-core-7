@@ -21,10 +21,16 @@ export async function GET(req: NextRequest) {
     ? undefined
     : session.memberships.map((m) => m.companyId);
 
+  // If companyId filter is specified, validate the user has access to it
+  if (companyId && !isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === companyId)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
   const where = {
-    ...(companyIds ? { companyId: { in: companyIds } } : {}),
-    ...(companyId ? { companyId } : {}),
-    ...(type ? { experienceType: type as 'PRODUCT_VIEWER' | 'SURFACE_AR' | 'IMAGE_TARGET' | 'QR_LAUNCH' | 'EMBED_VIEWER' } : {}),
+    ...(companyId
+      ? { companyId }
+      : companyIds ? { companyId: { in: companyIds } } : {}),
+    ...(type ? { experienceType: type as 'PRODUCT_VIEWER' | 'SURFACE_AR' | 'IMAGE_TARGET' | 'QR_LAUNCH' | 'EMBED_VIEWER' | 'FACE_TRYON' | 'BODY_TRYON' } : {}),
     ...(status ? { publishStatus: status as 'DRAFT' | 'READY' | 'PUBLISHED' | 'ARCHIVED' } : {}),
   };
 
@@ -53,8 +59,13 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json();
-  const { companyId, productId, name, experienceType, ...rest } = body;
+  let body;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ success: false, error: 'Invalid JSON body' }, { status: 400 });
+  }
+  const { companyId, productId, name, experienceType, scale, lightingPreset, backgroundMode, ctaText, ctaLink, sceneConfig } = body;
 
   if (!companyId || !name || !experienceType) {
     return NextResponse.json(
@@ -76,7 +87,12 @@ export async function POST(req: NextRequest) {
       name,
       slug,
       experienceType,
-      ...rest,
+      ...(scale != null && { scale }),
+      ...(lightingPreset && { lightingPreset }),
+      ...(backgroundMode && { backgroundMode }),
+      ...(ctaText !== undefined && { ctaText }),
+      ...(ctaLink !== undefined && { ctaLink }),
+      ...(sceneConfig && { sceneConfig }),
     },
     include: {
       company: { select: { id: true, name: true, slug: true } },

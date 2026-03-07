@@ -10,6 +10,11 @@
   var ARCore = {
     _baseUrl: '',
 
+    _escapeHtml: function (str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    },
+
     init: function (options) {
       this._baseUrl = (options && options.baseUrl) || window.location.origin;
     },
@@ -25,7 +30,7 @@
       this._ensureStyles();
 
       fetch(apiUrl)
-        .then(function (res) { return res.json(); })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
         .then(function (data) {
           if (data.error) {
             self._showError(overlay, 'Product not found', 'This product is not available.');
@@ -81,8 +86,8 @@
     _showError: function (overlay, title, message) {
       overlay.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;color:#fff;font-family:system-ui,sans-serif;padding:24px;text-align:center">' +
         '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' +
-        '<p style="font-size:18px;font-weight:600;margin:16px 0 0">' + title + '</p>' +
-        '<p style="margin-top:8px;font-size:14px;opacity:0.7;max-width:300px">' + message + '</p>' +
+        '<p style="font-size:18px;font-weight:600;margin:16px 0 0">' + this._escapeHtml(title) + '</p>' +
+        '<p style="margin-top:8px;font-size:14px;opacity:0.7;max-width:300px">' + this._escapeHtml(message) + '</p>' +
         '<button class="arcore-btn" onclick="this.closest(\'[data-arcore-overlay]\').remove()" style="margin-top:24px;background:#fff;color:#000">Close</button></div>';
     },
 
@@ -95,6 +100,12 @@
         if (video && video.srcObject) {
           video.srcObject.getTracks().forEach(function (t) { t.stop(); });
         }
+        // Remove iframes to stop any embedded camera streams
+        var iframes = overlay.querySelectorAll('iframe');
+        for (var i = 0; i < iframes.length; i++) {
+          iframes[i].src = 'about:blank';
+          iframes[i].remove();
+        }
         overlay.remove();
       };
       overlay.appendChild(btn);
@@ -104,8 +115,8 @@
     _addInfoBar: function (overlay, data) {
       var bar = document.createElement('div');
       bar.className = 'arcore-info';
-      bar.innerHTML = '<p style="font-size:18px;font-weight:700;margin:0">' + (data.name || '') + '</p>' +
-        '<p style="font-size:13px;opacity:0.7;margin:4px 0 0">' + (data.company || '') + '</p>';
+      bar.innerHTML = '<p style="font-size:18px;font-weight:700;margin:0">' + ARCore._escapeHtml(data.name || '') + '</p>' +
+        '<p style="font-size:13px;opacity:0.7;margin:4px 0 0">' + ARCore._escapeHtml(data.company || '') + '</p>';
       overlay.appendChild(bar);
       return bar;
     },
@@ -239,8 +250,8 @@
 
       var label = document.createElement('div');
       label.style.cssText = 'padding:10px 4px 6px;text-align:center;font-family:system-ui,sans-serif;';
-      label.innerHTML = '<p style="font-size:15px;font-weight:700;margin:0;color:#1a1a1a">' + data.name + '</p>' +
-        '<p style="font-size:12px;color:#666;margin:4px 0 0">' + (data.company || '') + '</p>';
+      label.innerHTML = '<p style="font-size:15px;font-weight:700;margin:0;color:#1a1a1a">' + ARCore._escapeHtml(data.name) + '</p>' +
+        '<p style="font-size:12px;color:#666;margin:4px 0 0">' + ARCore._escapeHtml(data.company || '') + '</p>';
       card.appendChild(label);
 
       container.appendChild(card);
@@ -361,7 +372,7 @@
       this._ensureStyles();
 
       fetch(apiUrl)
-        .then(function (res) { return res.json(); })
+        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.json(); })
         .then(function (data) {
           if (!data.success) {
             self._showError(overlay, 'Try-on not available', data.error || 'Experience not found.');

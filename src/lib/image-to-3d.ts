@@ -52,10 +52,10 @@ export async function queueImageTo3DJob(
     throw new Error('Image-to-3D generation is disabled. Set IMAGE_TO_3D_ENABLED=true');
   }
 
-  // Validate image size
-  const fullPath = sourceImagePath.startsWith('/')
+  // Validate image size — URL-relative paths need ./public prefix, absolute filesystem paths don't
+  const fullPath = sourceImagePath.startsWith('/') && !sourceImagePath.startsWith('/home')
     ? path.join('./public', sourceImagePath)
-    : path.join('./public', sourceImagePath);
+    : sourceImagePath;
 
   if (existsSync(fullPath)) {
     const stats = await stat(fullPath);
@@ -77,7 +77,7 @@ export async function queueImageTo3DJob(
     return existingJob.id;
   }
 
-  // Update product status to GENERATING_3D
+  // Update product status to GENERATING_3D (after existing job check to avoid spurious state change)
   await prisma.product.update({
     where: { id: productId },
     data: { status: 'GENERATING_3D' },
@@ -230,9 +230,9 @@ async function processImageTo3DJob(jobId: string): Promise<void> {
  * Returns: GLB binary buffer
  */
 async function callTripoSR(imagePath: string, config: ImageTo3DConfig): Promise<Buffer> {
-  const fullPath = imagePath.startsWith('/')
+  const fullPath = imagePath.startsWith('/') && !imagePath.startsWith('/home')
     ? path.join('./public', imagePath)
-    : path.join('./public', imagePath);
+    : imagePath;
 
   if (!existsSync(fullPath)) {
     throw new Error(`Source image not found: ${fullPath}`);
@@ -281,9 +281,9 @@ async function callTripoSR(imagePath: string, config: ImageTo3DConfig): Promise<
  * Returns: GLB binary buffer
  */
 async function callInstantMesh(imagePath: string, config: ImageTo3DConfig): Promise<Buffer> {
-  const fullPath = imagePath.startsWith('/')
+  const fullPath = imagePath.startsWith('/') && !imagePath.startsWith('/home')
     ? path.join('./public', imagePath)
-    : path.join('./public', imagePath);
+    : imagePath;
 
   if (!existsSync(fullPath)) {
     throw new Error(`Source image not found: ${fullPath}`);

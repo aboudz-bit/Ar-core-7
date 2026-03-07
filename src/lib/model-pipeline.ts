@@ -158,13 +158,17 @@ async function runPipeline(inputPath: string): Promise<PipelineResult> {
  * Basic GLB validation — checks magic number and version.
  */
 async function validateGlb(filePath: string): Promise<boolean> {
+  // Skip validation for remote files (S3, CDN)
+  if (filePath.startsWith('http')) return true;
+
   try {
     const fs = await import('fs/promises');
     const path = await import('path');
 
-    const fullPath = filePath.startsWith('/')
-      ? filePath
-      : path.default.join('./public', filePath);
+    // URL-relative paths (e.g. /uploads/...) need ./public prefix
+    const fullPath = filePath.startsWith('/') && !filePath.startsWith('/home')
+      ? path.default.join('./public', filePath)
+      : filePath;
 
     const buffer = await fs.default.readFile(fullPath);
 
@@ -179,8 +183,6 @@ async function validateGlb(filePath: string): Promise<boolean> {
 
     return true;
   } catch {
-    // If file is remote (S3), skip local validation
-    if (filePath.startsWith('http')) return true;
     return false;
   }
 }

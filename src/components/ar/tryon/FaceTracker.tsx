@@ -75,7 +75,7 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
     previous: FaceLandmark[] | null,
     factor: number
   ): FaceLandmark[] => {
-    if (!previous) return current;
+    if (!previous || previous.length !== current.length) return current;
     return current.map((point, i) => ({
       x: previous[i].x + (point.x - previous[i].x) * factor,
       y: previous[i].y + (point.y - previous[i].y) * factor,
@@ -85,8 +85,7 @@ export function FaceTracker({ videoRef, onResults, enabled, smoothingFactor = 0.
 
   const processFrame = useCallback(async () => {
     if (!enabled || !videoRef.current || !faceMeshRef.current) {
-      rafRef.current = requestAnimationFrame(processFrame);
-      return;
+      return; // Stop loop when disabled — it will be restarted by the effect
     }
 
     const video = videoRef.current;

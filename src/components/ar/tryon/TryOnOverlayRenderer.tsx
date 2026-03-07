@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import type { FaceTrackingResult, FaceLandmark } from './FaceTracker';
 
 interface OverlayAsset {
@@ -80,7 +80,7 @@ function computeHatTransform(
   const foreheadR = landmarks[FOREHEAD_RIGHT];
 
   const centerX = forehead.x * canvasWidth;
-  const centerY = forehead.y * canvasHeight - 20; // Offset above forehead
+  const centerY = forehead.y * canvasHeight - canvasHeight * 0.03; // Offset above forehead (resolution-independent)
 
   const foreheadWidth = Math.sqrt(
     ((foreheadR.x - foreheadL.x) * canvasWidth) ** 2 +
@@ -109,8 +109,10 @@ function computeEarringTransform(
   const x = ear.x * canvasWidth;
   const y = (ear.y + 0.02) * canvasHeight; // Slightly below ear
 
-  const width = 30 * scale;
-  const height = 50 * scale;
+  // Size proportional to face (use distance between ears as reference)
+  const faceRef = canvasWidth * 0.04; // Approximate ear-relative size
+  const width = faceRef * scale;
+  const height = faceRef * 1.6 * scale;
 
   return { x, y, width, height, rotation: 0 };
 }
@@ -151,10 +153,22 @@ export function TryOnOverlayRenderer({
 }: TryOnOverlayRendererProps) {
   const overlayImagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const rafRef = useRef<number>(0);
+  // Use refs for frequently-changing values to avoid recreating the render loop
+  const trackingResultRef = useRef(trackingResult);
+  const scaleRef = useRef(scale);
+  const placementModeRef = useRef(placementMode);
+  trackingResultRef.current = trackingResult;
+  scaleRef.current = scale;
+  placementModeRef.current = placementMode;
 
-  // Pre-load overlay images
+  // Pre-load overlay images; clean stale entries on overlay change
   useEffect(() => {
     const imageMap = overlayImagesRef.current;
+    const currentIds = new Set(overlays.map((o) => o.id));
+    // Remove stale entries
+    Array.from(imageMap.keys()).forEach((key) => {
+      if (!currentIds.has(key)) imageMap.delete(key);
+    });
     overlays.forEach((overlay) => {
       if (overlay.assetType === 'FACE_OVERLAY_IMAGE' && !imageMap.has(overlay.id)) {
         const img = new Image();
@@ -165,75 +179,82 @@ export function TryOnOverlayRenderer({
     });
   }, [overlays]);
 
-  const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas || !video || !enabled) return;
+  // Single stable render loop — only restarts when enabled/overlays/canvas/video change
+  useEffect(() => {
+    if (!enabled) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    function render() {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      if (!canvas || !video) {
+        rafRef.current = requestAnimationFrame(render);
+        return;
+      }
 
-    // Match canvas size to video
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
-    }
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        rafRef.current = requestAnimationFrame(render);
+        return;
+      }
 
-    // Clear and draw mirrored video frame
-    ctx.save();
-    ctx.translate(canvas.width, 0);
-    ctx.scale(-1, 1);
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    ctx.restore();
+      // Match canvas size to video
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+      }
 
-    // Draw overlay if face is tracked
-    if (trackingResult && trackingResult.landmarks.length > 0) {
-      const { landmarks } = trackingResult;
+      // Clear and draw mirrored video frame
+      ctx.save();
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
 
-      overlays.forEach((overlay) => {
-        if (overlay.assetType !== 'FACE_OVERLAY_IMAGE') return;
+      // Draw overlay if face is tracked
+      const result = trackingResultRef.current;
+      if (result && result.landmarks.length > 0) {
+        const { landmarks } = result;
 
-        const img = overlayImagesRef.current.get(overlay.id);
-        if (!img || !img.complete) return;
+        overlays.forEach((overlay) => {
+          if (overlay.assetType !== 'FACE_OVERLAY_IMAGE') return;
 
-        // Determine placement from overlay metadata or default
-        const placement = (overlay.metadata?.placement as string) || placementMode;
-        const transform = getTransformForPlacement(
-          placement,
-          landmarks,
-          canvas.width,
-          canvas.height,
-          scale
-        );
+          const img = overlayImagesRef.current.get(overlay.id);
+          if (!img || !img.complete) return;
 
-        // Mirror the x coordinate since we drew the video mirrored
-        const mirroredX = canvas.width - transform.x;
+          const placement = (overlay.metadata?.placement as string) || placementModeRef.current;
+          const transform = getTransformForPlacement(
+            placement,
+            landmarks,
+            canvas.width,
+            canvas.height,
+            scaleRef.current
+          );
 
-        ctx.save();
-        ctx.translate(mirroredX, transform.y);
-        ctx.rotate(-transform.rotation); // Negate rotation for mirror
-        ctx.drawImage(
-          img,
-          -transform.width / 2,
-          -transform.height / 2,
-          transform.width,
-          transform.height
-        );
-        ctx.restore();
-      });
+          // Mirror the x coordinate since we drew the video mirrored
+          const mirroredX = canvas.width - transform.x;
+
+          ctx.save();
+          ctx.translate(mirroredX, transform.y);
+          ctx.rotate(-transform.rotation); // Negate rotation for mirror
+          ctx.drawImage(
+            img,
+            -transform.width / 2,
+            -transform.height / 2,
+            transform.width,
+            transform.height
+          );
+          ctx.restore();
+        });
+      }
+
+      rafRef.current = requestAnimationFrame(render);
     }
 
     rafRef.current = requestAnimationFrame(render);
-  }, [canvasRef, videoRef, trackingResult, overlays, placementMode, scale, enabled]);
-
-  useEffect(() => {
-    if (enabled) {
-      rafRef.current = requestAnimationFrame(render);
-    }
     return () => {
       cancelAnimationFrame(rafRef.current);
     };
-  }, [enabled, render]);
+  }, [enabled, canvasRef, videoRef, overlays]);
 
   return null; // Headless — renders directly to the canvas ref
 }
