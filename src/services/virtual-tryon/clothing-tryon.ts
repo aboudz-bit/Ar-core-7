@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import path from 'path';
 import { writeFile, mkdir } from 'fs/promises';
 import { computeBodyMeasurements, enhanceWithProfile, type BodyProfile } from '@/services/body/body-measurements';
+import { generateOcclusionMask, renderOcclusionSVG } from './body-mask';
 
 export type TryOnJobStatus = 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
@@ -170,13 +171,71 @@ async function processTryOnJob(jobId: string) {
     const outputFilePath = path.join(outputDir, outputFileName);
     const publicPath = `/uploads/tryon-output/${outputFileName}`;
 
+    // Build composite layers
+    const compositeLayers: Array<{ input: Buffer; left: number; top: number; blend: string }> = [];
+
+    // Layer 1: garment on top of person
+    compositeLayers.push({
+      input: garmentResized,
+      left: overlayLeft,
+      top: overlayTop,
+      blend: 'over',
+    });
+
+    // Layer 2: occlusion mask — body regions (head/neck/arms) ON TOP of garment
+    // This creates the illusion of natural layering.
+    let occlusionApplied = false;
+    if (storedLandmarks && storedLandmarks.length >= 23) {
+      const maskResult = generateOcclusionMask(storedLandmarks, pW, pH);
+
+      if (maskResult.hasOcclusion) {
+        try {
+          // Render the mask SVG: white = body in front, black = garment visible
+          const svgMask = renderOcclusionSVG(maskResult.occlusionRegions, pW, pH);
+          const svgBuffer = Buffer.from(svgMask);
+
+          // Convert SVG mask to a grayscale alpha channel
+          const maskImage = await sharp(svgBuffer)
+            .resize(pW, pH)
+            .grayscale()
+            .png()
+            .toBuffer();
+
+          // Extract person pixels and apply the mask as alpha:
+          // Only head/neck/arm regions from the original person image survive
+          const personPixels = await sharp(job.personImagePath)
+            .resize(pW, pH, { fit: 'fill' })
+            .ensureAlpha()
+            .png()
+            .toBuffer();
+
+          // Composite: use the mask to cut out only the occlusion regions
+          // from the person image, then layer those on top of the garment
+          const occlusionLayer = await sharp(personPixels)
+            .composite([{
+              input: maskImage,
+              blend: 'dest-in' as never, // keep person pixels only where mask is white
+            }])
+            .png()
+            .toBuffer();
+
+          compositeLayers.push({
+            input: occlusionLayer,
+            left: 0,
+            top: 0,
+            blend: 'over',
+          });
+
+          occlusionApplied = true;
+        } catch (maskErr) {
+          // If masking fails, fall back to simple overlay (no crash)
+          console.warn(`[TryOnJob ${jobId}] Occlusion mask failed, using simple overlay:`, maskErr);
+        }
+      }
+    }
+
     await personImage
-      .composite([{
-        input: garmentResized,
-        left: overlayLeft,
-        top: overlayTop,
-        blend: 'over',
-      }])
+      .composite(compositeLayers as Parameters<typeof personImage.composite>[0])
       .png()
       .toFile(outputFilePath);
 
@@ -205,7 +264,8 @@ async function processTryOnJob(jobId: string) {
             profileWeightKg: storedProfile.weightKg,
             profileUsualSize: storedProfile.usualSize || null,
           }),
-          note: 'Estimation-based compositing overlay — not medically precise or tailor-grade. Results are approximate.',
+          occlusionMask: occlusionApplied,
+          note: 'Estimation-based compositing with landmark-polygon occlusion masking — not pixel-accurate segmentation. Results are approximate.',
         },
       },
     });
