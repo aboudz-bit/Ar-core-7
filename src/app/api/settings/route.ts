@@ -29,7 +29,11 @@ export async function PUT(req: NextRequest) {
 
   const { companyId, settings } = await req.json();
 
-  if (!isSuperAdmin(session) && companyId && !session.memberships.some((m) => m.companyId === companyId && ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(m.role))) {
+  if (!companyId && !isSuperAdmin(session)) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+  }
+
+  if (companyId && !isSuperAdmin(session) && !session.memberships.some((m) => m.companyId === companyId && ['SUPER_ADMIN', 'COMPANY_ADMIN'].includes(m.role))) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 

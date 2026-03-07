@@ -1,4 +1,4 @@
-import { prisma } from './prisma';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Model Optimization Pipeline
@@ -166,7 +166,7 @@ async function validateGlb(filePath: string): Promise<boolean> {
       ? filePath
       : path.default.join('./public', filePath);
 
-    const buffer = await fs.readFile(fullPath);
+    const buffer = await fs.default.readFile(fullPath);
 
     // GLB magic number: 0x46546C67 ('glTF')
     if (buffer.length < 12) return false;
