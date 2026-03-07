@@ -9,7 +9,7 @@ export async function GET(
 ) {
   const slug = params.slug;
 
-  // Find product by generating slug from title
+  // Find product by generating slug from title, or by matching experience slug
   const products = await prisma.product.findMany({
     where: { status: 'ACTIVE' },
     include: {
@@ -25,7 +25,8 @@ export async function GET(
 
   const product = products.find((p) => {
     const productSlug = p.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-    return productSlug === slug;
+    if (productSlug === slug) return true;
+    return p.experiences.some((e) => e.slug === slug);
   });
 
   if (!product) {
