@@ -91,11 +91,23 @@ interface VirtualFitClientProps {
   // Pre-existing garment images from the product
   garmentOverlays: { id: string; filePath: string; fileName: string }[];
   branding: { hideBranding: boolean };
+  // Optional merchant product specs — pre-populates fields and sends to try-on API
+  merchantSpecs?: {
+    garmentCategory: string;
+    fitType: string;
+    drapeFactor: number;
+    sizingSystem: string;
+    sizeChart: Record<string, Record<string, number>> | null;
+    garmentLength: number | null;
+    sleeveLength: number | null;
+    shoulderSpec: number | null;
+    chestSpec: number | null;
+  };
 }
 
 type JobStatus = 'idle' | 'uploading' | 'UPLOADED' | 'PROCESSING' | 'COMPLETE' | 'FAILED';
 
-export function VirtualFitClient({ experience, product, company, garmentOverlays, branding }: VirtualFitClientProps) {
+export function VirtualFitClient({ experience, product, company, garmentOverlays, branding, merchantSpecs }: VirtualFitClientProps) {
   const [personImage, setPersonImage] = useState<File | null>(null);
   const [personPreview, setPersonPreview] = useState<string | null>(null);
   const [garmentImage, setGarmentImage] = useState<File | null>(null);
@@ -121,9 +133,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const [heightCm, setHeightCm] = useState<string>('');
   const [weightKg, setWeightKg] = useState<string>('');
   const [usualSize, setUsualSize] = useState<string>('');
-  const [garmentCategory, setGarmentCategory] = useState<string>('t-shirt');
-  const [fitType, setFitType] = useState<string>('regular');
-  const [drapeFactor, setDrapeFactor] = useState<string>('1.0');
+  const [garmentCategory, setGarmentCategory] = useState<string>(merchantSpecs?.garmentCategory || 't-shirt');
+  const [fitType, setFitType] = useState<string>(merchantSpecs?.fitType || 'regular');
+  const [drapeFactor, setDrapeFactor] = useState<string>(merchantSpecs?.drapeFactor?.toString() || '1.0');
   const [detectedLandmarks, setDetectedLandmarks] = useState<PoseLandmark[] | null>(null);
   const [detectingPose, setDetectingPose] = useState(false);
 
@@ -246,6 +258,16 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       if (fitType) formData.append('fitType', fitType);
       if (drapeFactor && drapeFactor !== '1.0') formData.append('drapeFactor', drapeFactor);
 
+      // Send merchant-configured specs if available
+      if (merchantSpecs) {
+        if (merchantSpecs.sizeChart) formData.append('sizeChart', JSON.stringify(merchantSpecs.sizeChart));
+        if (merchantSpecs.sizingSystem) formData.append('sizingSystem', merchantSpecs.sizingSystem);
+        if (merchantSpecs.garmentLength != null) formData.append('garmentLength', String(merchantSpecs.garmentLength));
+        if (merchantSpecs.sleeveLength != null) formData.append('sleeveLength', String(merchantSpecs.sleeveLength));
+        if (merchantSpecs.shoulderSpec != null) formData.append('shoulderSpec', String(merchantSpecs.shoulderSpec));
+        if (merchantSpecs.chestSpec != null) formData.append('chestSpec', String(merchantSpecs.chestSpec));
+      }
+
       const res = await fetch('/api/public/tryon-jobs', {
         method: 'POST',
         body: formData,
@@ -265,7 +287,7 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
       setError('Network error. Please try again.');
       setStatus('FAILED');
     }
-  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, garmentCategory, fitType, drapeFactor, pollJobStatus]);
+  }, [personImage, garmentImage, selectedGarmentOverlay, company.id, experience.id, heightCm, weightKg, usualSize, detectedLandmarks, garmentCategory, fitType, drapeFactor, merchantSpecs, pollJobStatus]);
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);

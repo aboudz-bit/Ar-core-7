@@ -167,7 +167,7 @@ export default function MerchantProductsPage() {
                         <Pencil className="w-4 h-4 text-surface-700" />
                       </Link>
                       <Link
-                        href={`/virtual-fit/noor-virtual-fit-demo`}
+                        href={`/virtual-fit/preview/${product.id}`}
                         target="_blank"
                         className="p-2 bg-white rounded-lg shadow-md hover:bg-surface-50"
                       >

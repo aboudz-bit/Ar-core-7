@@ -76,6 +76,19 @@ export default function MerchantProductEditorPage() {
   const [drapeFactor, setDrapeFactor] = useState('1.0');
   const [sizeChart, setSizeChart] = useState<{ label: string; fields: Record<string, string> }[]>([]);
   const [newGarmentFile, setNewGarmentFile] = useState<File | null>(null);
+  const [newGarmentPreview, setNewGarmentPreview] = useState<string | null>(null);
+
+  const handleNewGarmentFile = useCallback((file: File | null) => {
+    if (newGarmentPreview) URL.revokeObjectURL(newGarmentPreview);
+    setNewGarmentFile(file);
+    setNewGarmentPreview(file ? URL.createObjectURL(file) : null);
+  }, [newGarmentPreview]);
+
+  // Clean up preview URL on unmount
+  useEffect(() => {
+    return () => { if (newGarmentPreview) URL.revokeObjectURL(newGarmentPreview); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadProduct = useCallback(async () => {
     try {
@@ -141,10 +154,10 @@ export default function MerchantProductEditorPage() {
       formData.append('fitType', fitType);
       formData.append('sizingSystem', sizingSystem);
       formData.append('drapeFactor', drapeFactor);
-      if (garmentLength) formData.append('garmentLength', garmentLength);
-      if (sleeveLength) formData.append('sleeveLength', sleeveLength);
-      if (shoulderSpec) formData.append('shoulderSpec', shoulderSpec);
-      if (chestSpec) formData.append('chestSpec', chestSpec);
+      formData.append('garmentLength', garmentLength);
+      formData.append('sleeveLength', sleeveLength);
+      formData.append('shoulderSpec', shoulderSpec);
+      formData.append('chestSpec', chestSpec);
       if (Object.keys(chartObj).length > 0) {
         formData.append('sizeChart', JSON.stringify(chartObj));
       } else {
@@ -228,7 +241,7 @@ export default function MerchantProductEditorPage() {
           </button>
           <div className="flex items-center gap-3">
             <Link
-              href="/virtual-fit/noor-virtual-fit-demo"
+              href={`/virtual-fit/preview/${productId}`}
               target="_blank"
               className="btn-secondary text-sm"
             >
@@ -255,9 +268,9 @@ export default function MerchantProductEditorPage() {
                 <Shirt className="w-4 h-4" /> Garment Image
               </h3>
               <div className="relative h-64 bg-surface-100 rounded-lg overflow-hidden mb-3">
-                {(newGarmentFile ? URL.createObjectURL(newGarmentFile) : product?.garmentImagePath) ? (
+                {(newGarmentPreview || product?.garmentImagePath) ? (
                   <img
-                    src={newGarmentFile ? URL.createObjectURL(newGarmentFile) : product!.garmentImagePath}
+                    src={newGarmentPreview || product!.garmentImagePath}
                     alt={title}
                     className="w-full h-full object-contain p-2"
                   />
@@ -273,7 +286,7 @@ export default function MerchantProductEditorPage() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="hidden"
-                  onChange={(e) => setNewGarmentFile(e.target.files?.[0] || null)}
+                  onChange={(e) => handleNewGarmentFile(e.target.files?.[0] || null)}
                 />
               </label>
             </div>

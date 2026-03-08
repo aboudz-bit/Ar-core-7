@@ -87,8 +87,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       const body = await req.json();
       companyId = body.companyId || session.memberships[0]?.companyId;
       updateData = body;
+      // Strip fields that must not be set via JSON body
       delete updateData.companyId;
       delete updateData.id;
+      delete updateData.garmentImagePath;
+      delete updateData.thumbnailUrl;
+      delete updateData.createdAt;
+      delete updateData.updatedAt;
     }
 
     if (!companyId) {
