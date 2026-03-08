@@ -10,6 +10,7 @@ export type {
   Setting,
   AuditLog,
   TryOnJob,
+  MerchantProduct,
 } from '@prisma/client';
 
 export type {

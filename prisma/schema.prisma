@@ -105,6 +105,7 @@ model Company {
   auditLogs       AuditLog[]
   apiKeys         ApiKey[]
   webhooks        Webhook[]
+  merchantProducts MerchantProduct[]
 }
 
 model ApiKey {
@@ -389,6 +390,31 @@ model ImageTo3DJob {
   @@index([productId])
   @@index([status])
   @@index([companyId])
+}
+
+model MerchantProduct {
+  id              String    @id @default(cuid())
+  companyId       String
+  title           String
+  garmentImagePath String   // Relative URL path to garment image under /uploads/
+  category        String    @default("t-shirt") // thobe, abaya, t-shirt, jacket, shirt, hoodie, sweater, polo, dress, other
+  fitType         String    @default("regular") // slim, regular, oversized, loose
+  sizingSystem    String    @default("letter") // letter, numeric, custom
+  sizeChart       Json?     // e.g. { "52": { "chest": 104, "shoulder": 45 }, ... }
+  garmentLength   Float?
+  sleeveLength    Float?
+  shoulderSpec    Float?
+  chestSpec       Float?
+  drapeFactor     Float     @default(1.0)
+  thumbnailUrl    String?
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([category])
+  @@index([isActive])
 }
 
 model TryOnJob {

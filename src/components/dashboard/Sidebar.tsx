@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   Menu,
   BookOpen,
+  Shirt,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -26,6 +27,7 @@ const navItems = [
   { label: 'Companies', href: '/dashboard/companies', icon: Building2 },
   { label: 'Users', href: '/dashboard/users', icon: Users },
   { label: 'Products', href: '/dashboard/products', icon: Package },
+  { label: 'Merchant Products', href: '/dashboard/merchant-products', icon: Shirt },
   { label: 'Assets', href: '/dashboard/assets', icon: FileImage },
   { label: 'Experiences', href: '/dashboard/experiences', icon: Sparkles },
   { label: 'Publish Center', href: '/dashboard/publish', icon: Send },
