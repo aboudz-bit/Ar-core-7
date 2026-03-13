@@ -1,0 +1,29 @@
+{
+  "_description": "Visual explainer template: AR-CORE-7 platform architecture (DRY RUN sample)",
+  "templateId": "ar-core-architecture",
+  "request": {
+    "subject": "AR-CORE-7 Architecture",
+    "format": "text",
+    "sections": [
+      { "title": "Frontend", "content": "Next.js app with React components for dashboard, AR viewer, and virtual try-on.", "order": 1 },
+      { "title": "API Layer", "content": "Next.js API routes handling auth, products, experiences, try-on jobs, and analytics.", "order": 2 },
+      { "title": "AR Pipeline", "content": "MediaPipe-based face/body tracking, garment warping, and composite rendering.", "order": 3 },
+      { "title": "Data Layer", "content": "Prisma ORM with PostgreSQL for companies, products, experiences, and assets.", "order": 4 },
+      { "title": "Merchant Dashboard", "content": "Company-scoped product management with garment specs, size charts, and try-on preview.", "order": 5 }
+    ]
+  },
+  "expectedDiagram": {
+    "nodes": [
+      { "id": "fe", "label": "Frontend (Next.js)", "type": "action" },
+      { "id": "api", "label": "API Routes", "type": "action" },
+      { "id": "ar", "label": "AR Pipeline", "type": "action" },
+      { "id": "db", "label": "Database", "type": "data" }
+    ],
+    "edges": [
+      { "from": "fe", "to": "api", "label": "fetch" },
+      { "from": "api", "to": "db", "label": "prisma" },
+      { "from": "fe", "to": "ar", "label": "camera feed" },
+      { "from": "ar", "to": "api", "label": "try-on jobs" }
+    ]
+  }
+}

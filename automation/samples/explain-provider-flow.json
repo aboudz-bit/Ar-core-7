@@ -1,0 +1,27 @@
+{
+  "_description": "Visual explainer template: Provider integration flow (DRY RUN sample)",
+  "templateId": "provider-flow",
+  "request": {
+    "subject": "Provider Integration Flow",
+    "format": "text",
+    "sections": [
+      { "title": "Event Submission", "content": "Bridge receives event from internal trigger or API call.", "order": 1 },
+      { "title": "Hook Matching", "content": "Integration manager matches event to registered hooks.", "order": 2 },
+      { "title": "Adapter Dispatch", "content": "Matching adapter sends event (mock in safe mode).", "order": 3 },
+      { "title": "Response Handling", "content": "Adapter returns mock response. No real data exchanged.", "order": 4 }
+    ]
+  },
+  "expectedDiagram": {
+    "nodes": [
+      { "id": "trigger", "label": "Event Trigger", "type": "start" },
+      { "id": "manager", "label": "Integration Manager", "type": "action" },
+      { "id": "adapter", "label": "Provider Adapter", "type": "provider" },
+      { "id": "response", "label": "Response", "type": "end" }
+    ],
+    "edges": [
+      { "from": "trigger", "to": "manager", "label": "fireEvent" },
+      { "from": "manager", "to": "adapter", "label": "dispatch" },
+      { "from": "adapter", "to": "response", "label": "return" }
+    ]
+  }
+}

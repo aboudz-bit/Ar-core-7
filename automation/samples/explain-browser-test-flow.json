@@ -1,0 +1,24 @@
+{
+  "_description": "Visual explainer template: Browser automation test flow (DRY RUN sample)",
+  "templateId": "browser-test-flow",
+  "request": {
+    "subject": "Browser Automation Test Flow",
+    "format": "text",
+    "sections": [
+      { "title": "Task Creation", "content": "BrowserTask created with action, target, and optional value.", "order": 1 },
+      { "title": "PinchTab Dispatch", "content": "Task sent to PinchTab adapter (mock in safe mode).", "order": 2 },
+      { "title": "Result Capture", "content": "BrowserTaskResult captured with success/failure and timing.", "order": 3 }
+    ]
+  },
+  "expectedDiagram": {
+    "nodes": [
+      { "id": "create", "label": "Create Task", "type": "start" },
+      { "id": "dispatch", "label": "PinchTab Adapter", "type": "provider" },
+      { "id": "result", "label": "Capture Result", "type": "end" }
+    ],
+    "edges": [
+      { "from": "create", "to": "dispatch", "label": "send" },
+      { "from": "dispatch", "to": "result", "label": "return" }
+    ]
+  }
+}

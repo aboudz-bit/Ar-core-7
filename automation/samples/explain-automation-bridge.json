@@ -1,0 +1,28 @@
+{
+  "_description": "Visual explainer template: Automation bridge architecture (DRY RUN sample)",
+  "templateId": "automation-bridge",
+  "request": {
+    "subject": "Automation Bridge Architecture",
+    "format": "diagram",
+    "sections": [
+      { "title": "Bridge Core", "content": "Central orchestrator managing agents, workflows, and task queue.", "order": 1 },
+      { "title": "Provider Adapters", "content": "Mock adapters for Claude, n8n, Paperclip, PinchTab, Dash, and custom providers.", "order": 2 },
+      { "title": "Queue System", "content": "Priority-based in-memory task queue with job lifecycle management.", "order": 3 },
+      { "title": "Safe Mode", "content": "All execution disabled by default. Dry-run only. No real API calls.", "order": 4 }
+    ]
+  },
+  "expectedDiagram": {
+    "nodes": [
+      { "id": "bridge", "label": "Automation Bridge", "type": "start" },
+      { "id": "queue", "label": "Task Queue", "type": "action" },
+      { "id": "agents", "label": "Agent Registry", "type": "action" },
+      { "id": "providers", "label": "Provider Adapters", "type": "provider" }
+    ],
+    "edges": [
+      { "from": "bridge", "to": "queue", "label": "submit" },
+      { "from": "bridge", "to": "agents", "label": "dispatch" },
+      { "from": "agents", "to": "providers", "label": "send" },
+      { "from": "queue", "to": "agents", "label": "dequeue" }
+    ]
+  }
+}

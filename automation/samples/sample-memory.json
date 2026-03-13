@@ -1,0 +1,31 @@
+{
+  "_description": "Sample memory entries for testing the memory agent layer (DRY RUN)",
+  "entries": [
+    {
+      "key": "user:last-tryon",
+      "value": { "productId": "mp-001", "garment": "Classic Thobe", "size": "L", "timestamp": "2026-03-13T10:00:00Z" },
+      "source": "tryon-pipeline",
+      "tags": ["user", "tryon", "recent"],
+      "ttlMs": 3600000
+    },
+    {
+      "key": "merchant:product-config",
+      "value": { "companyId": "comp-001", "productsConfigured": 5, "lastUpdated": "2026-03-13T09:30:00Z" },
+      "source": "merchant-dashboard",
+      "tags": ["merchant", "config"]
+    },
+    {
+      "key": "agent:recommendation",
+      "value": { "recommendedSize": "L", "confidence": 0.87, "category": "thobe", "fitType": "regular" },
+      "source": "claude-agent",
+      "tags": ["agent", "recommendation", "sizing"]
+    },
+    {
+      "key": "session:context",
+      "value": { "sessionId": "sess-123", "companyId": "comp-001", "locale": "ar-SA" },
+      "source": "session-manager",
+      "tags": ["session", "context"],
+      "ttlMs": 1800000
+    }
+  ]
+}
