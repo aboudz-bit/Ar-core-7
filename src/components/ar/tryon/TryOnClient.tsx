@@ -93,6 +93,16 @@ export function TryOnClient({ experience, product, company, overlays, branding }
     }
   }, [cameraReady, cameraError, trackingEnabled, trackingResult]);
 
+  // Timeout: if still in 'loading' after 15s, transition to no_face so the UI isn't stuck
+  useEffect(() => {
+    if (appState !== 'loading') return;
+    const timeout = setTimeout(() => {
+      setAppState((s) => (s === 'loading' ? 'no_face' : s));
+      if (!trackingEnabled) setTrackingEnabled(true);
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [appState, trackingEnabled]);
+
   const handleTrackingResults = useCallback((result: FaceTrackingResult | null) => {
     setTrackingResult(result);
   }, []);

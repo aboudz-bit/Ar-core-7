@@ -63,18 +63,18 @@ const PART_IDS = {
   RIGHT_HAND: 11,
 } as const;
 
-const HEAD_PARTS = new Set([PART_IDS.LEFT_FACE, PART_IDS.RIGHT_FACE]);
-const LEFT_ARM_PARTS = new Set([
+const HEAD_PARTS: Set<number> = new Set([PART_IDS.LEFT_FACE, PART_IDS.RIGHT_FACE]);
+const LEFT_ARM_PARTS: Set<number> = new Set([
   PART_IDS.LEFT_UPPER_ARM_FRONT, PART_IDS.LEFT_UPPER_ARM_BACK,
   PART_IDS.LEFT_LOWER_ARM_FRONT, PART_IDS.LEFT_LOWER_ARM_BACK,
   PART_IDS.LEFT_HAND,
 ]);
-const RIGHT_ARM_PARTS = new Set([
+const RIGHT_ARM_PARTS: Set<number> = new Set([
   PART_IDS.RIGHT_UPPER_ARM_FRONT, PART_IDS.RIGHT_UPPER_ARM_BACK,
   PART_IDS.RIGHT_LOWER_ARM_FRONT, PART_IDS.RIGHT_LOWER_ARM_BACK,
   PART_IDS.RIGHT_HAND,
 ]);
-const TORSO_PARTS = new Set([PART_IDS.TORSO_FRONT, PART_IDS.TORSO_BACK]);
+const TORSO_PARTS: Set<number> = new Set([PART_IDS.TORSO_FRONT, PART_IDS.TORSO_BACK]);
 
 function createPartMask(
   partData: Int32Array,
@@ -176,7 +176,9 @@ export async function segmentBody(
       resizeMask(torsoMaskRaw),
     ]);
 
-    const ALL_OCCLUSION_PARTS = new Set([...HEAD_PARTS, ...LEFT_ARM_PARTS, ...RIGHT_ARM_PARTS]);
+    const ALL_OCCLUSION_PARTS = new Set(
+      Array.from(HEAD_PARTS).concat(Array.from(LEFT_ARM_PARTS), Array.from(RIGHT_ARM_PARTS))
+    );
     const combinedOcclusionRaw = createPartMask(partData, procW, procH, ALL_OCCLUSION_PARTS, 5);
 
     const combinedMask = await sharp(combinedOcclusionRaw, { raw: { width: procW, height: procH, channels: 1 } })

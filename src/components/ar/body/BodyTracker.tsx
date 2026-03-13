@@ -167,27 +167,28 @@ export function useBodyCamera(initialFacingMode: 'user' | 'environment' = 'user'
       console.log('[BodyCamera] srcObject set, waiting for loadedmetadata...');
 
       await new Promise<void>((resolve, reject) => {
+        const v = video; // non-null — guarded above
         const timeout = setTimeout(() => reject(new Error('Video load timeout (10s)')), 10000);
 
         function onLoaded() {
           clearTimeout(timeout);
-          video.removeEventListener('loadedmetadata', onLoaded);
-          video.removeEventListener('error', onError);
+          v.removeEventListener('loadedmetadata', onLoaded);
+          v.removeEventListener('error', onError);
           resolve();
         }
         function onError() {
           clearTimeout(timeout);
-          video.removeEventListener('loadedmetadata', onLoaded);
-          video.removeEventListener('error', onError);
+          v.removeEventListener('loadedmetadata', onLoaded);
+          v.removeEventListener('error', onError);
           reject(new Error('Video element error event'));
         }
 
-        if (video.readyState >= 1) {
+        if (v.readyState >= 1) {
           clearTimeout(timeout);
           resolve();
         } else {
-          video.addEventListener('loadedmetadata', onLoaded);
-          video.addEventListener('error', onError);
+          v.addEventListener('loadedmetadata', onLoaded);
+          v.addEventListener('error', onError);
         }
       });
 

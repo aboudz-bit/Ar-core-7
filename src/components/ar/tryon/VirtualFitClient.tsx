@@ -7,24 +7,24 @@ import { loadPoseLib } from '@/lib/mediapipe-loader';
 type PoseLandmark = { x: number; y: number; z: number; visibility: number };
 
 async function detectPoseFromImage(imageFile: File): Promise<PoseLandmark[] | null> {
-  return new Promise(async (resolve) => {
-    try {
-      const PoseClass = await loadPoseLib();
+  try {
+    const PoseClass = await loadPoseLib();
 
-      const pose = new PoseClass({
-        locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
-      });
+    const pose = new PoseClass({
+      locateFile: (file: string) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/${file}`,
+    });
 
-      pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
+    pose.setOptions({
+      modelComplexity: 1,
+      smoothLandmarks: false,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
+    });
 
-      let resolved = false;
-      pose.onResults((results) => {
+    let resolved = false;
+    const resultPromise = new Promise<PoseLandmark[] | null>((resolve) => {
+      pose.onResults((results: { poseLandmarks?: PoseLandmark[] }) => {
         if (resolved) return;
         resolved = true;
         if (results.poseLandmarks && results.poseLandmarks.length >= 25) {
@@ -34,38 +34,47 @@ async function detectPoseFromImage(imageFile: File): Promise<PoseLandmark[] | nu
         }
         pose.close();
       });
+    });
 
-      await pose.initialize();
+    await pose.initialize();
 
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const objectUrl = URL.createObjectURL(imageFile);
-      img.onload = async () => {
-        URL.revokeObjectURL(objectUrl);
-        const canvas = document.createElement('canvas');
-        canvas.width = img.naturalWidth;
-        canvas.height = img.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { resolve(null); pose.close(); return; }
-        ctx.drawImage(img, 0, 0);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const objectUrl = URL.createObjectURL(imageFile);
 
-        try {
-          await pose.send({ image: canvas });
-        } catch {
-          if (!resolved) { resolved = true; resolve(null); pose.close(); }
-        }
-
-        setTimeout(() => {
-          if (!resolved) { resolved = true; resolve(null); pose.close(); }
-        }, 10000);
-      };
-      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(null); pose.close(); };
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error('Image load failed')); };
       img.src = objectUrl;
-    } catch (err) {
-      console.error('[VirtualFit] Pose detection failed:', err);
-      resolve(null);
+    });
+
+    URL.revokeObjectURL(objectUrl);
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) { pose.close(); return null; }
+    ctx.drawImage(img, 0, 0);
+
+    try {
+      await pose.send({ image: canvas });
+    } catch {
+      if (!resolved) { resolved = true; pose.close(); return null; }
     }
-  });
+
+    // Timeout: if onResults hasn't fired in 10s, give up
+    const timeout = new Promise<PoseLandmark[] | null>((resolve) => {
+      setTimeout(() => {
+        if (!resolved) { resolved = true; pose.close(); }
+        resolve(null);
+      }, 10000);
+    });
+
+    return await Promise.race([resultPromise, timeout]);
+  } catch (err) {
+    console.error('[VirtualFit] Pose detection failed:', err);
+    return null;
+  }
 }
 
 interface VirtualFitClientProps {
@@ -147,18 +156,24 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
-      if (personPreview) URL.revokeObjectURL(personPreview);
-      if (garmentPreview) URL.revokeObjectURL(garmentPreview);
+      if (personPreviewRef.current) URL.revokeObjectURL(personPreviewRef.current);
+      if (garmentPreviewRef.current) URL.revokeObjectURL(garmentPreviewRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const personPreviewRef = useRef<string | null>(null);
+  personPreviewRef.current = personPreview;
+  const garmentPreviewRef = useRef<string | null>(null);
+  garmentPreviewRef.current = garmentPreview;
 
   const handlePersonSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (personPreview) URL.revokeObjectURL(personPreview);
+    if (personPreviewRef.current) URL.revokeObjectURL(personPreviewRef.current);
     setPersonImage(file);
-    setPersonPreview(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setPersonPreview(url);
+    personPreviewRef.current = url;
     setOutputImage(null);
     setError(null);
     setDetectedLandmarks(null);
@@ -182,9 +197,11 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
   const handleGarmentSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (garmentPreview) URL.revokeObjectURL(garmentPreview);
+    if (garmentPreviewRef.current) URL.revokeObjectURL(garmentPreviewRef.current);
     setGarmentImage(file);
-    setGarmentPreview(URL.createObjectURL(file));
+    const url = URL.createObjectURL(file);
+    setGarmentPreview(url);
+    garmentPreviewRef.current = url;
     setSelectedGarmentOverlay(null);
     setOutputImage(null);
     setError(null);

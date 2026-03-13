@@ -176,6 +176,10 @@ export function TryOnOverlayRenderer({
       if (overlay.assetType === 'FACE_OVERLAY_IMAGE' && !imageMap.has(overlay.id)) {
         const img = new Image();
         img.crossOrigin = 'anonymous';
+        img.onerror = () => {
+          console.warn(`[OverlayRenderer] Failed to load overlay image: ${overlay.filePath}`);
+          imageMap.delete(overlay.id);
+        };
         img.src = overlay.filePath;
         imageMap.set(overlay.id, img);
       }

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
@@ -156,7 +156,7 @@ async function main() {
         productId: fitProduct.id,
         ctaText: 'Explore Collection',
         ctaLink: 'https://example.com/noor/collection',
-        sceneConfig: null,
+        sceneConfig: Prisma.DbNull,
       },
     });
     console.log('  Created experience: noor-virtual-fit-demo (CLOTHING_TRYON_PHOTO)');
