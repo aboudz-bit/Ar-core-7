@@ -78,6 +78,16 @@ export function BodyTrackingClient({ experience, product, company, branding }: B
     }
   }, [cameraReady, cameraError, trackingEnabled, trackingResult]);
 
+  // Timeout: if still in 'loading' after 15s, transition to no_body so the UI isn't stuck
+  useEffect(() => {
+    if (appState !== 'loading') return;
+    const timeout = setTimeout(() => {
+      setAppState((s) => (s === 'loading' ? 'no_body' : s));
+      if (!trackingEnabled) setTrackingEnabled(true);
+    }, 15000);
+    return () => clearTimeout(timeout);
+  }, [appState, trackingEnabled]);
+
   const handleTrackingResults = useCallback((result: BodyTrackingResult | null) => {
     setTrackingResult(result);
     if (result?.landmarks) {
