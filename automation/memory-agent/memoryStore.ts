@@ -48,13 +48,15 @@ export function has(key: string): boolean {
 /** Get all non-expired entries */
 export function getAll(): MemoryEntry[] {
   const entries: MemoryEntry[] = [];
-  for (const [key, entry] of store) {
+  const expired: string[] = [];
+  store.forEach((entry, key) => {
     if (isExpired(entry)) {
-      store.delete(key);
+      expired.push(key);
     } else {
       entries.push(entry);
     }
-  }
+  });
+  expired.forEach((key) => store.delete(key));
   return entries;
 }
 
@@ -71,11 +73,10 @@ export function clear(): void {
 /** Purge expired entries and return count removed */
 export function purgeExpired(): number {
   let removed = 0;
-  for (const [key, entry] of store) {
-    if (isExpired(entry)) {
-      store.delete(key);
-      removed++;
-    }
-  }
+  const expired: string[] = [];
+  store.forEach((entry, key) => {
+    if (isExpired(entry)) expired.push(key);
+  });
+  expired.forEach((key) => { store.delete(key); removed++; });
   return removed;
 }
