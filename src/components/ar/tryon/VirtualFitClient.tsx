@@ -308,6 +308,9 @@ export function VirtualFitClient({ experience, product, company, garmentOverlays
 
   const handleReset = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
+    // Revoke ObjectURLs to prevent memory leaks
+    if (personPreviewRef.current) { URL.revokeObjectURL(personPreviewRef.current); personPreviewRef.current = null; }
+    if (garmentPreviewRef.current) { URL.revokeObjectURL(garmentPreviewRef.current); garmentPreviewRef.current = null; }
     setPersonImage(null);
     setPersonPreview(null);
     setGarmentImage(null);

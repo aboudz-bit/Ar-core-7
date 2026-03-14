@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { Camera, ArrowLeft, AlertTriangle, Check, X, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 
@@ -9,38 +9,72 @@ export default function MindARImageDemoPage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'tracking' | 'error' | 'permission-denied'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
   const mindArRef = useRef<{ stop: () => void } | null>(null);
+  const rafRef = useRef<number>(0);
+
+  // Cleanup on unmount — stop MindAR session and animation loop
+  useEffect(() => {
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      if (mindArRef.current) {
+        try { mindArRef.current.stop(); } catch { /* already stopped */ }
+        mindArRef.current = null;
+      }
+    };
+  }, []);
 
   const startAR = useCallback(async () => {
     setStatus('loading');
     try {
       // Load MindAR via CDN script to avoid webpack bundling issues with Three.js version conflicts
-      if (!document.getElementById('mindar-script')) {
+      const existingMindar = document.getElementById('mindar-script') as HTMLScriptElement | null;
+      if (existingMindar) {
+        // Script element exists — wait for it to finish loading if not ready yet
+        if (existingMindar.dataset.loaded !== 'true') {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('MindAR script load timeout (15s)')), 15000);
+            existingMindar.addEventListener('load', () => { clearTimeout(timeout); resolve(); });
+            existingMindar.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Failed to load MindAR')); });
+          });
+        }
+      } else {
         await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('MindAR script load timeout (15s)')), 15000);
           const script = document.createElement('script');
           script.id = 'mindar-script';
           script.src = 'https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-three.prod.js';
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Failed to load MindAR'));
+          script.onload = () => { script.dataset.loaded = 'true'; clearTimeout(timeout); resolve(); };
+          script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to load MindAR library. Check your network connection.')); };
           document.head.appendChild(script);
         });
       }
 
       // Load Three.js via CDN as well (compatible version)
-      if (!document.getElementById('three-script')) {
+      const existingThree = document.getElementById('three-script') as HTMLScriptElement | null;
+      if (existingThree) {
+        if (existingThree.dataset.loaded !== 'true') {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Three.js script load timeout (15s)')), 15000);
+            existingThree.addEventListener('load', () => { clearTimeout(timeout); resolve(); });
+            existingThree.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Failed to load Three.js')); });
+          });
+        }
+      } else {
         await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Three.js script load timeout (15s)')), 15000);
           const script = document.createElement('script');
           script.id = 'three-script';
           script.src = 'https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js';
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Failed to load Three.js'));
+          script.onload = () => { script.dataset.loaded = 'true'; clearTimeout(timeout); resolve(); };
+          script.onerror = () => { clearTimeout(timeout); reject(new Error('Failed to load Three.js. Check your network connection.')); };
           document.head.appendChild(script);
         });
       }
 
       if (!containerRef.current) return;
 
+      // Safeguard: verify libraries are available on window before accessing
       const win = window as unknown as {
-        MINDAR: { IMAGE: { MindARThree: new (config: { container: HTMLElement; imageTargetSrc: string }) => {
+        MINDAR?: { IMAGE?: { MindARThree: new (config: { container: HTMLElement; imageTargetSrc: string }) => {
           renderer: { render: (scene: unknown, camera: unknown) => void };
           scene: { add: (obj: unknown) => void };
           camera: unknown;
@@ -48,8 +82,16 @@ export default function MindARImageDemoPage() {
           start: () => Promise<void>;
           stop: () => void;
         } } };
-        THREE: typeof import('three');
+        THREE?: typeof import('three');
       };
+
+      if (!win.MINDAR || !win.MINDAR.IMAGE) {
+        throw new Error('MindAR library failed to initialize. The AR tracking engine could not be loaded. Please reload the page and try again.');
+      }
+
+      if (!win.THREE) {
+        throw new Error('Three.js library failed to initialize. Please reload the page and try again.');
+      }
 
       const { MindARThree } = win.MINDAR.IMAGE;
       const THREE = win.THREE;
@@ -89,12 +131,12 @@ export default function MindARImageDemoPage() {
       setStatus('ready');
       mindArRef.current = mindarThree;
 
-      // Animation loop
+      // Animation loop (tracked for cleanup)
       const animate = () => {
         cube.rotation.y += 0.01;
         cube.rotation.x += 0.005;
         renderer.render(scene, camera);
-        requestAnimationFrame(animate);
+        rafRef.current = requestAnimationFrame(animate);
       };
       animate();
     } catch (err: unknown) {
@@ -102,10 +144,16 @@ export default function MindARImageDemoPage() {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('Permission') || msg.includes('NotAllowed')) {
         setStatus('permission-denied');
-        setErrorMsg('Camera permission was denied. Please allow camera access and try again.');
+        setErrorMsg('Camera permission was denied. Please allow camera access in your browser settings and try again.');
+      } else if (msg.includes('timeout')) {
+        setStatus('error');
+        setErrorMsg('AR library took too long to load. Please check your network connection and try again.');
+      } else if (msg.includes('NotFound') || msg.includes('DevicesNotFound')) {
+        setStatus('error');
+        setErrorMsg('No camera found on this device. A camera is required for AR experiences.');
       } else {
         setStatus('error');
-        setErrorMsg(msg || 'Failed to initialize AR');
+        setErrorMsg(msg || 'Failed to initialize AR. Please try again.');
       }
     }
   }, []);
@@ -164,7 +212,7 @@ export default function MindARImageDemoPage() {
             className="flex items-center gap-2 px-8 py-3 rounded-xl bg-brand-600 text-white font-semibold hover:bg-brand-700 transition-colors disabled:opacity-50"
           >
             {status === 'loading' ? (
-              <><RefreshCw className="w-5 h-5 animate-spin" /> Initializing...</>
+              <><RefreshCw className="w-5 h-5 animate-spin" /> Loading AR engine...</>
             ) : (
               <><Camera className="w-5 h-5" /> Start Camera</>
             )}

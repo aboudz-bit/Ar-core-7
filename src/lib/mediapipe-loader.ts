@@ -11,20 +11,27 @@ const POSE_CDN = 'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/po
 
 const loadedScripts = new Map<string, Promise<void>>();
 
-function loadScript(src: string): Promise<void> {
+function loadScript(src: string, timeoutMs = 20000): Promise<void> {
   const existing = loadedScripts.get(src);
   if (existing) return existing;
 
   const promise = new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`MediaPipe script load timeout (${timeoutMs / 1000}s): ${src}`));
+    }, timeoutMs);
+
+    function done() { clearTimeout(timeout); resolve(); }
+    function fail(reason: string) { clearTimeout(timeout); reject(new Error(reason)); }
+
     // Check if script already exists in DOM
     const existingScript = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
     if (existingScript) {
       // Script element exists — wait for it to finish loading if it hasn't yet
       if (existingScript.dataset.loaded === 'true') {
-        resolve();
+        done();
       } else {
-        existingScript.addEventListener('load', () => resolve());
-        existingScript.addEventListener('error', () => reject(new Error(`Failed to load MediaPipe script: ${src}`)));
+        existingScript.addEventListener('load', done);
+        existingScript.addEventListener('error', () => fail(`Failed to load MediaPipe script: ${src}`));
       }
       return;
     }
@@ -32,8 +39,8 @@ function loadScript(src: string): Promise<void> {
     const script = document.createElement('script');
     script.src = src;
     script.async = true;
-    script.onload = () => { script.dataset.loaded = 'true'; resolve(); };
-    script.onerror = () => reject(new Error(`Failed to load MediaPipe script: ${src}`));
+    script.onload = () => { script.dataset.loaded = 'true'; done(); };
+    script.onerror = () => fail(`Failed to load MediaPipe script: ${src}. Check your network connection.`);
     document.head.appendChild(script);
   });
 

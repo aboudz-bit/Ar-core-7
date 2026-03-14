@@ -210,8 +210,12 @@ export function TryOnClient({ experience, product, company, overlays, branding }
       {appState === 'loading' && (
         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/80">
           <Loader2 className="w-10 h-10 text-white animate-spin mb-4" />
-          <p className="text-white/80 text-sm font-medium">Initializing face tracking...</p>
-          <p className="text-white/40 text-xs mt-2">Please allow camera access</p>
+          <p className="text-white/80 text-sm font-medium">
+            {!cameraReady ? 'Initializing camera...' : 'Preparing AR tracking...'}
+          </p>
+          <p className="text-white/40 text-xs mt-2">
+            {!cameraReady ? 'Please allow camera access when prompted' : 'Loading face tracking model'}
+          </p>
         </div>
       )}
 

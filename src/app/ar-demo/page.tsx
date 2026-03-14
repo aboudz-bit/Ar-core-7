@@ -171,10 +171,13 @@ export default function ArDemoPage() {
         <div className="max-w-5xl mx-auto">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">AR Test Center</h1>
           <p className="text-sm text-white/50 mt-1">
-            Use this page to test all AR modes in AR-CORE-7
+            Test all AR experiences across face try-on, body tracking, virtual fit, 3D viewers, and standalone demos.
+          </p>
+          <p className="text-xs text-white/30 mt-1">
+            Camera-based demos require camera permission. Best on mobile for AR placement.
           </p>
           {baseUrl && (
-            <p className="text-xs text-white/30 mt-2 font-mono break-all">{baseUrl}</p>
+            <p className="text-xs text-white/20 mt-2 font-mono break-all">{baseUrl}</p>
           )}
         </div>
       </div>
@@ -223,9 +226,11 @@ export default function ArDemoPage() {
                       href={card.route}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 text-center px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors"
+                      className="flex-1 text-center px-3 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-white text-xs font-medium transition-colors active:bg-white/20"
                     >
-                      Open
+                      {card.badge === 'camera' ? 'Launch Camera' :
+                       card.badge === 'upload' ? 'Open Upload' :
+                       card.badge === 'viewer' ? 'View 3D' : 'Open Demo'}
                     </a>
                     <CopyButton text={`${baseUrl}${card.route}`} />
                   </div>

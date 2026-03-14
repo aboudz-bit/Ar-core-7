@@ -203,8 +203,19 @@ export function useBodyCamera(initialFacingMode: 'user' | 'environment' = 'user'
       console.log('[BodyCamera] Video playing, readyState:', video.readyState);
       setCameraReady(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Camera access denied';
-      console.error('[BodyCamera] Failed:', message, err);
+      const raw = err instanceof Error ? err.message : String(err);
+      console.error('[BodyCamera] Failed:', raw, err);
+      // Provide user-friendly messages for common camera errors
+      let message = raw;
+      if (raw.includes('NotAllowed') || raw.includes('Permission')) {
+        message = 'Camera permission denied. Please allow camera access in your browser settings and try again.';
+      } else if (raw.includes('NotFound') || raw.includes('DevicesNotFound')) {
+        message = 'No camera found on this device.';
+      } else if (raw.includes('NotReadable') || raw.includes('TrackStartError')) {
+        message = 'Camera is in use by another application. Please close other apps using the camera.';
+      } else if (raw.includes('OverconstrainedError')) {
+        message = 'Camera does not support the requested settings. Trying default settings...';
+      }
       setCameraError(message);
     }
   }, [facingMode]);
